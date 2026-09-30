@@ -68,6 +68,12 @@ TrazJá-specific rules include:
 6. Consolidate remaining multiple-permissive-policy performance warnings.
 7. Generate a complete reproducible baseline migration from the live database before production rollout.
 
+## Customer PWA contract verification
+
+The first customer PWA implementation uses only the following live contracts: `create_delivery_draft`, `calculate_delivery_quote`, and `confirm_delivery`, plus RLS-protected draft inserts into `delivery_stops`, `delivery_packages`, and `delivery_evidence`. The client uploads package evidence only to the private `delivery-evidence` bucket, whose live policy accepts JPEG and WebP objects up to 10 MiB. Delivery history reads participant-authorized rows and subscribes to `delivery_events` for tracking refreshes.
+
+The live database currently exposes no `customer_assistant_context` RPC. Paula is visible in the customer UI but reports this missing contract rather than fabricating account or delivery context. The current draft workflow is still multi-request from the client; an atomic server-side customer workflow should replace it before production rollout so partial draft rows or orphaned evidence objects cannot be left when a later step fails. The client does not delete evidence objects because the storage contract intentionally provides no client delete path.
+
 ## Important audit note
 
 The database is currently populated structurally but has no application rows. Performance Advisor reports unused indexes; these are expected until real workloads exist. They should not be removed merely to silence the advisor.

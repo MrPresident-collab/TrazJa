@@ -43,4 +43,8 @@ Multi-stop delivery is first-class:
 
 The initial Supabase project was inspected before application scaffolding. Existing policies contained several object-level authorization defects; those were corrected before frontend work began.
 
-The next implementation layer is the three application surfaces and their shared domain services.
+The customer PWA is now scaffolded in `apps/customer` on the `feature/trazja-customer-experience` branch. Run it with `pnpm --filter @trazja/customer dev` and provide the publishable Supabase key from `.env.example`.
+
+The customer workflow uses only verified live contracts: `create_delivery_draft`, draft-scoped inserts into `delivery_stops`, `delivery_packages`, and `delivery_evidence`, private `delivery-evidence` Storage uploads, `calculate_delivery_quote`, and `confirm_delivery`. Prices, totals, service levels, availability, delivery state, and authorization remain backend-owned. Realtime delivery events refresh shipment tracking; no client-calculated shipment state is persisted.
+
+The live backend does not currently expose `customer_assistant_context`; Paula is therefore visible but reports the missing contract instead of fabricating assistance. A production assistant RPC, plus atomic server-side validation of the complete draft (stops, package, evidence, quote snapshot, and confirmation), remain backend work before broad rollout. The exact live contract and security notes are recorded in `supabase/BACKEND_AUDIT.md`.

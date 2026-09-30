@@ -1,0 +1,10 @@
+{
+  "name": "TrazJá",
+  "short_name": "TrazJá",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F4F0",
+  "theme_color": "#17212B",
+  "lang": "pt-AO",
+  "description": "Envia pacotes e acompanha entregas com o TrazJá."
+}
