@@ -1,0 +1,16 @@
+{
+  "name": "trazja",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "dev:customer": "pnpm --filter @trazja/customer dev",
+    "dev:courier": "pnpm --filter @trazja/courier dev",
+    "dev:operations": "pnpm --filter @trazja/operations dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
