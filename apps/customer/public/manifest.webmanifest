@@ -1,10 +1,10 @@
 {
-  "name": "TrazJá",
-  "short_name": "TrazJá",
+  "name": "PegaJá",
+  "short_name": "PegaJá",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F7F4F0",
-  "theme_color": "#17212B",
+  "background_color": "#F5F3EF",
+  "theme_color": "#171717",
   "lang": "pt-AO",
-  "description": "Envia pacotes e acompanha entregas com o TrazJá."
+  "description": "Envia pacotes e acompanha entregas com o PegaJá."
 }
