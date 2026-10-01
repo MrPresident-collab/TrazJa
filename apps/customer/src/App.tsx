@@ -34,7 +34,10 @@ function App() {
   const [signupPending, setSignupPending] = useState(() => sessionStorage.getItem('pegaja-signup-pending') === '1');
   const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'email' | 'signup-form' | 'signup-otp'>('phone');
   const [phone, setPhone] = useState('');
-  const [signupData, setSignupData] = useState<SignupData | null>(null);
+  const [signupData, setSignupData] = useState<SignupData | null>(() => {
+    const stored = sessionStorage.getItem('pegaja-signup-data');
+    return stored ? JSON.parse(stored) as SignupData : null;
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -55,6 +58,7 @@ function App() {
         sessionStorage.removeItem('pegaja-signup-pending');
         setSignupPending(false);
         setSignupData(null);
+        sessionStorage.removeItem('pegaja-signup-data');
         setAuthStep('phone');
       }}
       onCancel={async () => {
@@ -62,6 +66,7 @@ function App() {
         sessionStorage.removeItem('pegaja-signup-pending');
         setSignupPending(false);
         setSignupData(null);
+        sessionStorage.removeItem('pegaja-signup-data');
         setWelcomeSeen(false);
         setAuthStep('phone');
       }}
@@ -110,6 +115,7 @@ function App() {
     return <SignupFormScreen
       onContinue={(data) => {
         setSignupData(data);
+        sessionStorage.setItem('pegaja-signup-data', JSON.stringify(data));
         setPhone(data.phone);
         setAuthStep('signup-otp');
       }}
@@ -376,7 +382,7 @@ function SignupCompletionScreen({ user, data, onComplete, onCancel }: { user: Au
     };
     void complete();
     return () => { cancelled = true; };
-  }, [data, onComplete]);
+  }, [data]);
 
   return <main className="signup-screen signup-completion-screen">
     <section className="signup-content">
