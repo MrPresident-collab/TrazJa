@@ -659,26 +659,26 @@ function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: 
 
   return <section className="home-dashboard">
     <div className="home-header">
-      <div>
-        <h1>Olá, {firstName}.</h1>
-        <p>O que precisa ir hoje?</p>
-      </div>
-      <button className="paula-trigger" onClick={onOpenPaula} aria-label="Abrir Paula"><span>P</span><small>Paula</small></button>
+      <button className="paula-stack" onClick={onOpenPaula} aria-label="Pergunta a Paula">
+        <span className="paula-person">🙎🏾‍♀️</span>
+        <span>Pergunta a Paula</span>
+      </button>
+      <button className="home-location" type="button" aria-label="Endereço de recolha">
+        <span className="home-location-icon"><MapPin size={18} /></span>
+        <span><strong>{addresses[0]?.label || addresses[0]?.locality || addresses[0]?.address_line || 'Adicionar endereço'}</strong></span>
+        <ChevronRight size={18} />
+      </button>
     </div>
 
-    <button className="home-location" type="button">
-      <span className="home-location-icon"><MapPin size={18} /></span>
-      <span><strong>{addresses[0]?.label || addresses[0]?.locality || addresses[0]?.address_line || 'Adicionar endereço'}</strong></span>
-      <ChevronRight size={18} />
-    </button>
-
-    <div className="home-map-card" aria-label="Mapa da operação PegaJá">
+    <div className="home-map-card" aria-label="Mapa">
       <div className="map-grid" />
       <div className="map-road map-road-a" />
       <div className="map-road map-road-b" />
       <div className="map-route"><span className="map-pin pickup"><MapPin size={15} /></span><span className="map-line" /><span className="map-pin destination"><Package size={15} /></span></div>
       <div className="map-caption"><span><i className="status-dot" /> {active ? activeStatus : 'A tua zona'}</span>{active && <strong>{destination}</strong>}</div>
     </div>
+
+    <div className="home-prompt">O que precisa ir?</div>
 
     <button className="home-new-shipment" onClick={() => setShowNew(true)} disabled={loading || levels.length === 0}>
       <span className="home-new-icon"><Plus size={25} /></span>
@@ -690,20 +690,16 @@ function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: 
     {error && <div className="error">{error}</div>}
 
     <section className="home-active">
-       <div className="home-section-heading"><div><p className="eyebrow">Em movimento</p></div></div>
-       {active ? <div className="active-shipment-card">
-      <div className="home-section-heading"><div><p className="eyebrow">Em movimento</p><h2>{active.reference}</h2></div><span className="home-live"><i /> AO VIVO</span></div>
-      <div className="active-shipment-card">
+      <div className="home-section-heading"><div><p className="eyebrow">Em movimento</p></div></div>
+      {active ? <div className="active-shipment-card">
         <div className="active-route">
           <div><span className="route-dot pickup-dot" /><div><small>Recolha</small><strong>{active.delivery_stops?.[0]?.locality || active.delivery_stops?.[0]?.address_line || 'Origem'}</strong></div></div>
           <div className="route-connector" />
           <div><span className="route-dot destination-dot" /><div><small>Destino</small><strong>{destination}</strong></div></div>
         </div>
         <div className="active-footer"><span>{activeStatus}</span><strong>{money(active.total_amount ?? active.quoted_amount, active.currency)}</strong></div>
-      </div>
-    </section>}
-
-    <section className="home-actions"></section>
+      </div> : <div className="empty home-movement-empty"><strong>Ainda não tens nenhum envio em movimento.</strong><p>Faz o teu primeiro envio e acompanha o pacote aqui.</p></div>}
+    </section>
   </section>;
 }
 function Step({ number, title, body }: { number: string; title: string; body: string }) { return <div className="step"><span>{number}</span><div><strong>{title}</strong><p>{body}</p></div></div>; }
