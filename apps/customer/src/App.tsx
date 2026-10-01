@@ -223,11 +223,10 @@ function formatAngolaPhone(phone: string) {
   return digits.length === 9 ? `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}` : `+244 ${digits}`;
 }
 
-function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount, onVisitor }: {
+function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: {
   onPhoneContinue: (phone: string) => void;
   onEmailContinue: () => void;
   onCreateAccount: () => void;
-  onVisitor: () => void;
 }) {
   const [phone, setPhone] = useState('');
   const normalizedPhone = normalizeAngolaPhone(phone);
@@ -265,7 +264,7 @@ function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount, onVi
         />
       </div>
       <button className="primary welcome-continue" type="submit" disabled={!normalizedPhone}>CONTINUAR</button>
-      <button className="welcome-email" type="button" onClick={onVisitor}>Continuar como visitante</button>
+
     </form>
     <div className="welcome-divider"><span>ou</span></div>
     <button className="welcome-email" onClick={onEmailContinue}>Continuar com Email</button>
