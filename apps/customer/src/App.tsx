@@ -56,13 +56,13 @@ function SplashScreen({ onStart }: { onStart: () => void }) {
 }
 
 function normalizeAngolaPhone(value: string) {
-  const digits = value.replace(/\\D/g, '');
+  const digits = value.replace(/\D/g, '');
   const local = digits.startsWith('244') ? digits.slice(3) : digits;
   return local.length === 9 ? `+244${local}` : '';
 }
 
 function formatAngolaPhone(phone: string) {
-  const digits = phone.replace(/\\D/g, '').replace(/^244/, '').slice(0, 9);
+  const digits = phone.replace(/\D/g, '').replace(/^244/, '').slice(0, 9);
   return digits.length === 9 ? `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}` : `+244 ${digits}`;
 }
 
@@ -97,7 +97,7 @@ function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: { 
           autoComplete="tel-national"
           placeholder="9XX XXX XXX"
           value={phone}
-          onChange={(event) => setPhone(event.target.value.replace(/\\D/g, '').slice(0, 9))}
+          onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 9))}
           aria-label="Número de telefone"
         />
       </div>
@@ -112,6 +112,7 @@ function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: { 
 function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: string; onBack: () => void; onChangeNumber: () => void }) {
   const [code, setCode] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(60);
+  const [expirySeconds, setExpirySeconds] = useState(300);
   const [busy, setBusy] = useState(true);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
@@ -125,6 +126,7 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
       setError('Não foi possível enviar o código. Tenta novamente.');
     } else {
       setSecondsLeft(60);
+      setExpirySeconds(300);
     }
     setResending(false);
   };
@@ -150,6 +152,12 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
   }, [secondsLeft]);
 
   useEffect(() => {
+    if (expirySeconds <= 0) return;
+    const timer = window.setInterval(() => setExpirySeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [expirySeconds]);
+
+  useEffect(() => {
     if (code.length !== 6 || busy || resending) return;
     let cancelled = false;
     const verify = async () => {
@@ -170,7 +178,7 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
 
   const handleCodeChange = (value: string) => {
     setError('');
-    setCode(value.replace(/\\D/g, '').slice(0, 6));
+    setCode(value.replace(/\D/g, '').slice(0, 6));
   };
 
   return <main className="phone-verify-screen">
@@ -198,7 +206,7 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
         disabled={busy || resending}
         aria-label="Código de 6 dígitos"
       />
-      <p className="otp-expiry">O código expira em {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</p>
+      <p className="otp-expiry">O código expira em {Math.floor(expirySeconds / 60)}:{String(expirySeconds % 60).padStart(2, '0')}</p>
       {error && <p className="error phone-verify-error">{error}</p>}
       <div className="otp-resend">
         <span>Não recebeste o código?</span>
