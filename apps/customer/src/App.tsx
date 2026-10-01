@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './lib/supabase';
-import { Bell, Camera, Check, ChevronRight, CircleHelp, Clock3, FileText, Home, LogOut, MapPin, Package, Plus, RefreshCw, Send, User, X } from 'lucide-react';
+import { Camera, Check, ChevronRight, CircleHelp, Clock3, FileText, LogOut, MapPin, Package, Plus, RefreshCw, Send, User, X } from 'lucide-react';
 import type { Session, User as AuthUser } from '@supabase/supabase-js';
 
 type Address = { id: string; label: string | null; address_line: string; locality: string | null; city: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null };
@@ -623,8 +623,8 @@ function AuthScreen({ onBack, onContinue }: { onBack: () => void; onContinue: (e
 }
 
 function CustomerShell({ user }: { user: AuthUser }) {
-  const [tab, setTab] = useState<'home' | 'shipments' | 'notifications' | 'profile'>('home'); const [refreshToken, setRefreshToken] = useState(0); const [paulaOpen, setPaulaOpen] = useState(false);
-  return <div className="app-shell"><header className="topbar"><div><p className="eyebrow">PegaJá</p><strong>Olá, {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'cliente'}</strong></div><button className="icon-button" onClick={() => setPaulaOpen(true)} aria-label="Abrir Paula"><CircleHelp size={22} /></button></header><main className="page-content">{tab === 'home' && <HomeTab user={user} onCreated={() => { setRefreshToken((n) => n + 1); setTab('shipments'); }} onOpenPaula={() => setPaulaOpen(true)} />}{tab === 'shipments' && <ShipmentsTab refreshToken={refreshToken} />}{tab === 'notifications' && <NotificationsTab />}{tab === 'profile' && <ProfileTab user={user} />}</main><nav className="bottom-nav" aria-label="Navegação principal"><NavButton active={tab === 'home'} icon={<Home size={20} />} label="Início" onClick={() => setTab('home')} /><NavButton active={tab === 'shipments'} icon={<Send size={20} />} label="Envios" onClick={() => setTab('shipments')} /><NavButton active={tab === 'notifications'} icon={<Bell size={20} />} label="Notificações" onClick={() => setTab('notifications')} /><NavButton active={tab === 'profile'} icon={<User size={20} />} label="Perfil" onClick={() => setTab('profile')} /></nav>{paulaOpen && <PaulaModal onClose={() => setPaulaOpen(false)} user={user} />}</div>;
+  const [tab, setTab] = useState<'send' | 'activities' | 'profile'>('send'); const [refreshToken, setRefreshToken] = useState(0); const [paulaOpen, setPaulaOpen] = useState(false);
+  return <div className="app-shell"><header className="topbar"><div><p className="eyebrow">PegaJá</p><strong>Olá, {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'cliente'}</strong></div><button className="icon-button" onClick={() => setPaulaOpen(true)} aria-label="Abrir Paula"><CircleHelp size={22} /></button></header><main className="page-content">{tab === 'send' && <HomeTab user={user} onCreated={() => { setRefreshToken((n) => n + 1); setTab('activities'); }} onOpenPaula={() => setPaulaOpen(true)} />}{tab === 'activities' && <ShipmentsTab refreshToken={refreshToken} />}{tab === 'profile' && <ProfileTab user={user} />}</main><nav className="bottom-nav" aria-label="Navegação principal"><NavButton active={tab === 'send'} icon={<Send size={20} />} label="Enviar" onClick={() => setTab('send')} /><NavButton active={tab === 'activities'} icon={<RefreshCw size={20} />} label="Atividades" onClick={() => setTab('activities')} /><NavButton active={tab === 'profile'} icon={<User size={20} />} label="Perfil" onClick={() => setTab('profile')} /></nav>{paulaOpen && <PaulaModal onClose={() => setPaulaOpen(false)} user={user} />}</div>;
 }
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) { return <button className={active ? 'nav-button active' : 'nav-button'} onClick={onClick}>{icon}<span>{label}</span></button>; }
 
@@ -661,7 +661,6 @@ function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: 
   return <section className="home-dashboard">
     <div className="home-header">
       <div>
-        <p className="eyebrow">PegaJá</p>
         <h1>Olá, {firstName}.</h1>
         <p>O que precisa ir hoje?</p>
       </div>
