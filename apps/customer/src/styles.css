@@ -214,3 +214,41 @@
 .profile-edit-sheet{padding-bottom:28px}
 @media(max-width:390px){.profile-page{padding-left:16px;padding-right:16px}.profile-theme-grid{grid-template-columns:1fr}.profile-identity-main h1{font-size:20px}}
 @media(min-width:640px){.profile-page{padding-left:32px;padding-right:32px}}
+
+/* PegaJá shipment flow */
+.shipment-flow{padding-bottom:34px}
+.shipment-step-intro{display:flex;align-items:center;gap:12px}
+.shipment-step-intro h1{margin:2px 0 0;font-size:29px;letter-spacing:-.03em}
+.shipment-step-number{width:34px;height:34px;border-radius:50%;background:var(--coal);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700}
+.shipment-safety-note{display:flex;align-items:center;gap:10px;padding:14px 15px;background:#FFF6ED;border:1px solid #F2D2B1;border-radius:14px;color:var(--coal);font-size:13px}
+.shipment-safety-note svg{color:var(--orange);flex:0 0 auto}
+.shipment-address-choices{display:flex;flex-direction:column;gap:9px}
+.shipment-address-card{width:100%;display:flex;align-items:center;gap:11px;text-align:left;background:var(--white);border:1px solid #DDD6CF;border-radius:15px;padding:14px;color:var(--coal)}
+.shipment-address-card.selected{border-color:var(--orange);box-shadow:0 0 0 2px #F28C2822}
+.shipment-address-card>span{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.shipment-address-card small{font-size:11px;color:var(--metal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shipment-address-card svg:first-child{color:var(--orange);flex:0 0 auto}
+.shipment-package-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shipment-package-card{min-height:154px;padding:14px;text-align:left;background:var(--white);border:1px solid #DDD6CF;border-radius:16px;color:var(--coal);display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.shipment-package-card.selected{border-color:var(--orange);box-shadow:0 0 0 2px #F28C2822}
+.shipment-package-icon{font-size:30px;line-height:1}
+.shipment-package-card small{color:var(--metal);font-size:10px;line-height:1.35}
+.field-hint{display:block;color:var(--metal);font-weight:400;font-size:10px;margin:4px 0 5px}
+.shipment-camera-box{margin-top:3px}
+.shipment-camera-box small{max-width:260px;line-height:1.4}
+.shipment-delivery-mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.shipment-mode-card{min-height:88px;padding:14px;text-align:left;background:var(--white);border:1px solid #DDD6CF;border-radius:15px;color:var(--coal);display:flex;flex-direction:column;gap:5px}
+.shipment-mode-card:last-child{grid-column:1 / -1}
+.shipment-mode-card.selected{border-color:var(--orange);box-shadow:0 0 0 2px #F28C2822}
+.shipment-mode-card small{font-size:11px;color:var(--metal)}
+.shipment-service-list{gap:9px}
+.section-label{font-size:12px;font-weight:700;color:var(--metal);margin:0 0 8px}
+.shipment-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;background:#101010;border:1px solid #292929;border-radius:17px;padding:10px;overflow:hidden}
+.calendar-day{min-height:70px;background:#191919;border:1px solid #2A2A2A;border-radius:11px;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.calendar-day small,.calendar-day span{font-size:9px;color:#A7AAAD}.calendar-day strong{font-size:18px}.calendar-day.selected{background:var(--orange);border-color:var(--orange);color:var(--coal)}.calendar-day.selected small,.calendar-day.selected span{color:var(--coal)}
+.time-wheel{height:190px;overflow-y:auto;scroll-snap-type:y mandatory;background:#101010;border:1px solid #292929;border-radius:17px;padding:62px 10px}
+.time-wheel-track{display:flex;flex-direction:column;gap:5px}
+.time-option{min-height:42px;background:transparent;border:0;border-radius:11px;color:#888;font-size:17px;scroll-snap-align:center}
+.time-option.selected{background:var(--orange);color:var(--coal);font-weight:800}
+.tip-preview{padding:12px 14px;border-radius:12px;background:#FFF6ED;border:1px solid #F2D2B1;font-size:13px;font-weight:700}
+@media(max-width:520px){.shipment-calendar{grid-template-columns:repeat(4,minmax(0,1fr))}.shipment-package-grid{grid-template-columns:1fr}.shipment-package-card{min-height:132px}}
