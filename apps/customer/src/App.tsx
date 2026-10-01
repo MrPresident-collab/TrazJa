@@ -171,6 +171,65 @@ type SignupData = {
   secondary: { label: string; address_line: string; locality: string; reference: string } | null;
 };
 
+function normalizeAngolaPhone(value: string) {
+  const digits = value.replace(/\D/g, '');
+  const local = digits.startsWith('244') ? digits.slice(3) : digits;
+  return local.length === 9 ? `+244${local}` : '';
+}
+
+function formatAngolaPhone(phone: string) {
+  const digits = phone.replace(/\D/g, '').replace(/^244/, '').slice(0, 9);
+  return digits.length === 9 ? `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}` : `+244 ${digits}`;
+}
+
+function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: {
+  onPhoneContinue: (phone: string) => void;
+  onEmailContinue: () => void;
+  onCreateAccount: () => void;
+}) {
+  const [phone, setPhone] = useState('');
+  const normalizedPhone = normalizeAngolaPhone(phone);
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (normalizedPhone) onPhoneContinue(normalizedPhone);
+  };
+
+  return <main className="welcome-screen">
+    <div className="welcome-image-wrap">
+      <img
+        src="https://images.pexels.com/photos/6868626/pexels-photo-6868626.jpeg?cs=srgb&dl=pexels-kindelmedia-6868626.jpg&fm=jpg"
+        alt="Mulher africana a receber uma encomenda de um estafeta"
+        className="welcome-image"
+      />
+    </div>
+    <section className="welcome-copy">
+      <p className="welcome-tagline">Tudo que precisa ir, Chega!</p>
+      <p className="welcome-support">Você prepara.<br />Nós entregamos.</p>
+    </section>
+    <form className="welcome-auth" onSubmit={submit}>
+      <label htmlFor="welcome-phone">Telefone</label>
+      <div className="phone-input">
+        <span>+244</span>
+        <input
+          id="welcome-phone"
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          placeholder="9XX XXX XXX"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 9))}
+          aria-label="Número de telefone"
+        />
+      </div>
+      <button className="primary welcome-continue" type="submit" disabled={!normalizedPhone}>CONTINUAR</button>
+    </form>
+    <div className="welcome-divider"><span>ou</span></div>
+    <button className="welcome-email" onClick={onEmailContinue}>Continuar com Email</button>
+    <p className="welcome-create">Não tens conta? <button onClick={onCreateAccount}>Criar conta</button></p>
+  </main>;
+}
+
 function SignupFormScreen({ onContinue, onBack }: { onContinue: (data: SignupData) => void; onBack: () => void }) {
   const [firstName, setFirstName] = useState('');
   const [surname, setSurname] = useState('');
