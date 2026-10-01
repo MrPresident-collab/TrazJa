@@ -106,11 +106,12 @@ function App() {
         sessionStorage.setItem('pegaja-welcome-seen', '1');
         void supabase.auth.signInAnonymously({
           options: { data: { full_name: 'Visitante' } },
-        }).then(({ error }) => {
-          if (error) {
+        }).then(({ data, error }) => {
+          if (error || !data.session) {
             console.error('PegaJá visitor access:', error);
             sessionStorage.removeItem('pegaja-welcome-seen');
             setWelcomeSeen(false);
+            setAuthStep('phone');
           }
         });
       }}
@@ -844,7 +845,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
       }).select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').single();
       setBusy(false);
       if (addressError || !data) { setError(addressError?.message || 'Não foi possível guardar o local de recolha.'); return; }
-      addresses.unshift(data as Address);
+      setAddresses((current) => [data as Address, ...current]);
       setPickupId(data.id);
     }
     if (step === 2) prepareQuote(); else if (step < 3) setStep((value) => value + 1); else confirm();
