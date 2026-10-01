@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './lib/supabase';
-import { Bell, Briefcase, Camera, Check, ChevronRight, CircleHelp, Clock3, FileText, HandCoins, Home, LockKeyhole, Mail, MapPin, MessageCircle, Moon, Package, Pencil, Phone, Plus, RefreshCw, Search, Send, ShieldCheck, Smartphone, Star, Sun, Trash2, User, WalletCards, X } from 'lucide-react';
+import { Bell, Briefcase, Camera, Check, ChevronRight, CircleHelp, Clock3, FileText, HandCoins, Home, LockKeyhole, Mail, MapPin, MessageCircle, Moon, Package, Pencil, Phone, Plus, RefreshCw, Search, Send, ShieldCheck, Settings, Smartphone, Star, Sun, Trash2, User, WalletCards, X, LogOut } from 'lucide-react';
 import type { Session, User as AuthUser } from '@supabase/supabase-js';
 
 type Address = { id: string; label: string | null; address_line: string; locality: string | null; city: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null };
@@ -624,8 +624,22 @@ function AuthScreen({ onBack, onContinue }: { onBack: () => void; onContinue: (e
 }
 
 function CustomerShell({ user }: { user: AuthUser }) {
-  const [tab, setTab] = useState<'send' | 'activities' | 'profile'>('send'); const [refreshToken, setRefreshToken] = useState(0); const [paulaOpen, setPaulaOpen] = useState(false);
-  return <div className="app-shell"><main className="page-content">{tab === 'send' && <HomeTab user={user} onCreated={() => { setRefreshToken((n) => n + 1); setTab('activities'); }} onOpenPaula={() => setPaulaOpen(true)} />}{tab === 'activities' && <ShipmentsTab refreshToken={refreshToken} />}{tab === 'profile' && <ProfileTab user={user} />}</main><nav className="bottom-nav" aria-label="Navegação principal"><NavButton active={tab === 'send'} icon={<Send size={20} />} label="Enviar" onClick={() => setTab('send')} /><NavButton active={tab === 'activities'} icon={<RefreshCw size={20} />} label="Atividades" onClick={() => setTab('activities')} /><NavButton active={tab === 'profile'} icon={<User size={20} />} label="Perfil" onClick={() => setTab('profile')} /></nav>{paulaOpen && <PaulaModal onClose={() => setPaulaOpen(false)} user={user} />}</div>;
+  const [tab, setTab] = useState<'send' | 'activities' | 'profile'>('send');
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [paulaOpen, setPaulaOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  useEffect(() => {
+    const openPaula = () => setPaulaOpen(true);
+    const openNotifications = () => setNotificationsOpen(true);
+    window.addEventListener('pegaja-open-paula', openPaula);
+    window.addEventListener('pegaja-open-notifications', openNotifications);
+    return () => {
+      window.removeEventListener('pegaja-open-paula', openPaula);
+      window.removeEventListener('pegaja-open-notifications', openNotifications);
+    };
+  }, []);
+  return <div className="app-shell"><main className="page-content">{tab === 'send' && <HomeTab user={user} onCreated={() => { setRefreshToken((n) => n + 1); setTab('activities'); }} onOpenPaula={() => setPaulaOpen(true)} />}{tab === 'activities' && <ShipmentsTab refreshToken={refreshToken} />}{tab === 'profile' && <ProfileTab user={user} />}</main>
+    <nav className="bottom-nav" aria-label="Navegação principal"><NavButton active={tab === 'send'} icon={<Send size={20} />} label="Enviar" onClick={() => setTab('send')} /><NavButton active={tab === 'activities'} icon={<RefreshCw size={20} />} label="Atividades" onClick={() => setTab('activities')} /><NavButton active={tab === 'profile'} icon={<User size={20} />} label="Perfil" onClick={() => setTab('profile')} /></nav>{paulaOpen && <PaulaModal onClose={() => setPaulaOpen(false)} />}{notificationsOpen && <div className="modal-backdrop"><div className="modal-sheet profile-notifications-sheet"><NotificationsTab /><button className="primary" onClick={() => setNotificationsOpen(false)}>Fechar</button></div></div>}</div>;
 }
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) { return <button className={active ? 'nav-button active' : 'nav-button'} onClick={onClick}>{icon}<span>{label}</span></button>; }
 
@@ -896,7 +910,7 @@ function ProfileTab({ user }: { user: AuthUser }) {
       <div className="profile-payment-list">
         <div className="profile-payment"><HandCoins size={20} /><strong>Dinheiro</strong></div>
         <div className="profile-payment"><WalletCards size={20} /><strong>Multicaixa</strong></div>
-        <div className="profile-payment"><WalletCards size={20} /><strong>Carteira</strong>{wallet && <span>{money(wallet.balance, wallet.currency)}</span>}</div>
+        <div className="profile-payment"><WalletCards size={20} /><strong>Carteira</strong></div>
       </div>
     </section>
 
