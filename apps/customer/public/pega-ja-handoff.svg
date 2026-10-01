@@ -1,0 +1,52 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="metal" x1="110" y1="90" x2="390" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B9BEC2"/>
+      <stop offset="0.5" stop-color="#747A7F"/>
+      <stop offset="1" stop-color="#454A4E"/>
+    </linearGradient>
+    <linearGradient id="metal2" x1="392" y1="102" x2="122" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2E4E5"/>
+      <stop offset="0.5" stop-color="#8B9195"/>
+      <stop offset="1" stop-color="#555B60"/>
+    </linearGradient>
+    <linearGradient id="box" x1="204" y1="213" x2="316" y2="324" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB25A"/>
+      <stop offset="1" stop-color="#F28C28"/>
+    </linearGradient>
+    <filter id="shadow" x="86" y="75" width="340" height="365" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity=".28"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- Left hand: palm and wrist -->
+    <path d="M111 357C103 331 105 306 119 282L158 214C164 203 178 199 189 205C201 212 204 226 198 238L178 277L194 263L224 205C230 193 244 188 256 194C268 201 272 215 266 227L246 270L262 255L291 206C298 194 313 191 324 198C336 206 339 221 332 233L305 278L322 266L344 229C351 218 365 215 376 222C387 229 390 244 384 255L348 319C339 335 325 349 308 358L277 375L294 405C298 413 294 423 286 427L244 448C235 452 224 448 220 439L205 408C184 401 163 392 143 381C128 373 116 366 111 357Z" fill="url(#metal)" stroke="#25292C" stroke-width="6" stroke-linejoin="round"/>
+    <!-- Left fingers definition -->
+    <path d="M177 277L204 245" stroke="#3D4246" stroke-width="7" stroke-linecap="round"/>
+    <path d="M226 269L251 231" stroke="#3D4246" stroke-width="7" stroke-linecap="round"/>
+    <path d="M263 254L289 220" stroke="#3D4246" stroke-width="7" stroke-linecap="round"/>
+    <path d="M303 277L327 244" stroke="#3D4246" stroke-width="7" stroke-linecap="round"/>
+
+    <!-- Right hand approaching / receiving -->
+    <path d="M401 356C409 330 407 305 393 281L354 213C348 202 334 198 323 205C311 212 308 226 314 238L334 277L318 263L288 205C282 193 268 188 256 194C244 201 240 215 246 227L266 270L250 255L221 206C214 194 199 191 188 198C176 206 173 221 180 233L207 278L190 266L168 229C161 218 147 215 136 222C125 229 122 244 128 255L164 319C173 335 187 349 204 358L235 375L218 405C214 413 218 423 226 427L268 448C277 452 288 448 292 439L307 408C328 401 349 392 369 381C384 373 396 366 401 356Z" fill="url(#metal2)" stroke="#25292C" stroke-width="6" stroke-linejoin="round"/>
+    <!-- Right fingers definition -->
+    <path d="M335 277L308 245" stroke="#51575B" stroke-width="7" stroke-linecap="round"/>
+    <path d="M286 269L261 231" stroke="#51575B" stroke-width="7" stroke-linecap="round"/>
+    <path d="M249 254L223 220" stroke="#51575B" stroke-width="7" stroke-linecap="round"/>
+    <path d="M209 277L185 244" stroke="#51575B" stroke-width="7" stroke-linecap="round"/>
+
+    <!-- Package held between the hands -->
+    <path d="M195 214L256 187L317 214L256 242L195 214Z" fill="#FFB25A" stroke="#2A2D2F" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M195 214V291L256 322V242L195 214Z" fill="url(#box)" stroke="#2A2D2F" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M317 214V291L256 322V242L317 214Z" fill="#E67E1B" stroke="#2A2D2F" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M256 187V242" stroke="#2A2D2F" stroke-width="5"/>
+    <path d="M227 201L287 228" stroke="#F8C078" stroke-width="5" stroke-linecap="round"/>
+    <path d="M256 242V322" stroke="#2A2D2F" stroke-width="5"/>
+    <path d="M218 225L256 242L294 225" stroke="#FFF0DA" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+
+  <!-- subtle speed / handoff accents -->
+  <path d="M92 177C114 145 141 122 173 106" stroke="#F28C28" stroke-width="7" stroke-linecap="round" opacity=".85"/>
+  <path d="M339 106C371 122 398 145 420 177" stroke="#F28C28" stroke-width="7" stroke-linecap="round" opacity=".85"/>
+</svg>
