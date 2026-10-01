@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './lib/supabase';
-import { Camera, Check, ChevronRight, CircleHelp, Clock3, FileText, Search, LogOut, MapPin, Package, Plus, RefreshCw, Send, User, X } from 'lucide-react';
+import { Bell, Briefcase, Camera, Check, ChevronRight, CircleHelp, Clock3, FileText, HandCoins, Home, LockKeyhole, Mail, MapPin, MessageCircle, Moon, Package, Pencil, Phone, Plus, RefreshCw, Search, Send, ShieldCheck, Smartphone, Star, Sun, Trash2, User, WalletCards, X } from 'lucide-react';
 import type { Session, User as AuthUser } from '@supabase/supabase-js';
 
 type Address = { id: string; label: string | null; address_line: string; locality: string | null; city: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null };
@@ -12,8 +12,9 @@ type Draft = { id: string; reference: string; status: string };
 type Quote = { id: string; total_amount: number; subtotal_amount: number; gratuity_amount: number; currency: string; valid_until: string | null };
 
 const paymentOptions = [
-  { value: 'wallet', label: 'Carteira PegaJá' },
   { value: 'cash', label: 'Dinheiro' },
+  { value: 'multicaixa', label: 'Multicaixa' },
+  { value: 'wallet', label: 'Carteira' },
 ] as const;
 const gratuityOptions = [
   { value: '0', label: 'Não' },
@@ -786,7 +787,183 @@ function ShipmentsTab({ refreshToken }: { refreshToken: number }) {
   </section>;
 }function NotificationsTab() { const [items, setItems] = useState<Notification[]>([]); const [error, setError] = useState(''); useEffect(() => { supabase.from('notifications').select('id,title,body,read_at,created_at,type').order('created_at', { ascending: false }).limit(100).then(({ data, error: queryError }) => { setItems(data || []); setError(queryError?.message || ''); }); }, []); return <section className="stack page-section"><div><p className="eyebrow">Acompanha o que importa</p><h1>Notificações</h1><p className="muted">Atualizações dos teus envios e da conta.</p></div>{error && <div className="error">{error}</div>}{items.map((item) => <div className={item.read_at ? 'notification' : 'notification unread'} key={item.id}><div className="round-icon terracotta"><Bell size={18} /></div><div><strong>{item.title}</strong><p>{item.body}</p><small>{new Date(item.created_at).toLocaleString('pt-AO')}</small></div></div>)}{!items.length && !error && <EmptyState title="Sem notificações" body="Quando houver novidades, aparecem aqui." />}</section>; }
 
-function ProfileTab({ user }: { user: AuthUser }) { const [profile, setProfile] = useState({ full_name: '', phone: '' }); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false); useEffect(() => { supabase.from('profiles').select('full_name,phone').eq('id', user.id).single().then(({ data }) => setProfile({ full_name: data?.full_name || user.user_metadata?.full_name || '', phone: data?.phone || '' })); }, [user]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setMessage(''); const { error } = await supabase.from('profiles').update(profile).eq('id', user.id); setMessage(error ? 'Não conseguimos guardar as alterações. Tenta novamente.' : 'Perfil actualizado.'); setBusy(false); }; return <section className="stack page-section"><div><p className="eyebrow">A tua conta</p><h1>Perfil</h1><p className="muted">Mantém os teus dados de contacto sempre actualizados.</p></div><form onSubmit={save} className="stack surface-card"><label>Nome<input value={profile.full_name} onChange={(e) => setProfile({ ...profile, full_name: e.target.value })} /></label><label>Telefone<input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></label><label>Email<input value={user.email || ''} disabled /></label>{message && <div className={message === 'Perfil actualizado.' ? 'success' : 'error'}>{message}</div>}<button className="primary" disabled={busy}>{busy ? 'A guardar…' : 'Guardar alterações'}</button></form><button className="secondary danger" onClick={() => supabase.auth.signOut()}><LogOut size={18} /> Sair</button></section>; }
+function ProfileTab({ user }: { user: AuthUser }) {
+  const [profile, setProfile] = useState({ full_name: '', phone: '' });
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [wallet, setWallet] = useState<{ balance: number; currency: string; status: string } | null>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState(user.email || '');
+  const [editPhone, setEditPhone] = useState(user.phone || '');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showPinInfo, setShowPinInfo] = useState(false);
+
+  const load = async () => {
+    const [{ data: profileData }, { data: addressData }, { data: walletData }, { count }] = await Promise.all([
+      supabase.from('profiles').select('full_name,phone').eq('id', user.id).single(),
+      supabase.from('addresses').select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').eq('user_id', user.id).order('created_at', { ascending: true }),
+      supabase.from('wallet_accounts').select('balance,currency,status').eq('user_id', user.id).maybeSingle(),
+      supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).is('read_at', null),
+    ]);
+    const nextProfile = { full_name: profileData?.full_name || user.user_metadata?.full_name || '', phone: profileData?.phone || user.phone || '' };
+    setProfile(nextProfile);
+    setEditName(nextProfile.full_name);
+    setEditPhone(nextProfile.phone);
+    setEditEmail(user.email || '');
+    setAddresses((addressData as Address[]) || []);
+    setWallet(walletData || null);
+    setUnreadNotifications(count || 0);
+  };
+
+  useEffect(() => { void load(); }, [user.id]);
+
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    const nextName = editName.trim();
+    const nextEmail = editEmail.trim().toLowerCase();
+    const nextPhone = normalizeAngolaPhone(editPhone);
+    if (!nextName || !nextPhone) {
+      setMessage('Preenche o nome e um número de telefone válido.');
+      setBusy(false);
+      return;
+    }
+    const { error: profileError } = await supabase.from('profiles').update({ full_name: nextName }).eq('id', user.id);
+    if (profileError) {
+      setMessage('Não conseguimos guardar os teus dados. Tenta novamente.');
+      setBusy(false);
+      return;
+    }
+    let feedback = 'Dados actualizados.';
+    if (nextEmail && nextEmail !== (user.email || '').toLowerCase()) {
+      const { error } = await supabase.auth.updateUser({ email: nextEmail });
+      feedback = error ? 'Nome actualizado, mas não foi possível iniciar a verificação do novo email.' : 'Nome actualizado. Enviámos uma verificação para o novo email.';
+    }
+    if (nextPhone && nextPhone !== (user.phone || profile.phone)) {
+      const { error } = await supabase.auth.updateUser({ phone: nextPhone });
+      feedback += error ? ' Não foi possível iniciar a verificação do novo telefone.' : ' Enviámos um código para verificar o novo telefone.';
+    }
+    setMessage(feedback);
+    setEditOpen(false);
+    setBusy(false);
+    await load();
+  };
+
+  const addressFor = (label: string) => addresses.find((item) => (item.label || '').toLowerCase() === label.toLowerCase());
+  const identityPhone = user.phone || profile.phone;
+  const emailVerified = Boolean(user.email && user.email_confirmed_at);
+  const phoneVerified = Boolean(user.phone);
+  const home = addressFor('Casa');
+  const work = addressFor('Trabalho');
+  const favoriteCount = addresses.filter((item) => !['casa', 'trabalho'].includes((item.label || '').toLowerCase())).length;
+
+  return <section className="profile-page">
+    <header className="profile-identity">
+      <div className="profile-avatar"><User size={28} /></div>
+      <div className="profile-identity-main">
+        <h1>{profile.full_name || 'Cliente PegaJá'}</h1>
+        <div className="profile-identity-line"><span className={phoneVerified ? 'verified' : ''}>{phoneVerified ? '✓ ' : ''}{identityPhone ? formatAngolaPhone(identityPhone) : 'Telefone não definido'}</span></div>
+        {user.email && <div className="profile-identity-line"><span className={emailVerified ? 'verified' : ''}>{emailVerified ? '✓ ' : ''}{user.email}</span></div>}
+      </div>
+      <button className="icon-button profile-edit-button" onClick={() => setEditOpen(true)} aria-label="Editar perfil"><Pencil size={17} /></button>
+    </header>
+    {message && <div className="success profile-message">{message}</div>}
+
+    <section className="profile-section">
+      <div className="profile-section-heading"><h2>Dados pessoais</h2><button className="text-button" onClick={() => setEditOpen(true)}>Editar <ChevronRight size={15} /></button></div>
+      <div className="profile-list">
+        <div className="profile-row"><User size={18} /><div><small>Nome</small><strong>{profile.full_name || '—'}</strong></div></div>
+        <div className="profile-row"><Phone size={18} /><div><small>Telefone</small><strong>{identityPhone ? formatAngolaPhone(identityPhone) : '—'}</strong></div></div>
+        <div className="profile-row"><Mail size={18} /><div><small>Email</small><strong>{user.email || '—'}</strong></div></div>
+      </div>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section-heading"><h2>Endereços</h2></div>
+      <div className="profile-list">
+        <div className="profile-row profile-row-action"><Home size={18} /><div><small>Casa</small><strong>{home?.address_line || 'Adicionar endereço'}</strong></div><ChevronRight size={17} /></div>
+        <div className="profile-row profile-row-action"><Briefcase size={18} /><div><small>Trabalho</small><strong>{work?.address_line || 'Adicionar endereço'}</strong></div><ChevronRight size={17} /></div>
+        <div className="profile-row profile-row-action"><Star size={18} /><div><small>Favoritos</small><strong>{favoriteCount ? 'Endereços guardados' : 'Nenhum favorito ainda'}</strong></div><ChevronRight size={17} /></div>
+        <button className="profile-add-row"><Plus size={18} /><span>Adicionar endereço</span></button>
+      </div>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section-heading"><h2>Pagamentos</h2></div>
+      <div className="profile-payment-list">
+        <div className="profile-payment"><HandCoins size={20} /><strong>Dinheiro</strong></div>
+        <div className="profile-payment"><WalletCards size={20} /><strong>Multicaixa</strong></div>
+        <div className="profile-payment"><WalletCards size={20} /><strong>Carteira</strong>{wallet && <span>{money(wallet.balance, wallet.currency)}</span>}</div>
+      </div>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section-heading"><h2>Notificações & Preferências</h2></div>
+      <div className="profile-list">
+        <div className="profile-row profile-row-action"><Bell size={18} /><div><small>Notificações</small><strong>{unreadNotifications ? `${unreadNotifications} por ler` : 'Tudo em dia'}</strong></div><ChevronRight size={17} /></div>
+        <div className="profile-row"><Settings size={18} /><div><small>Promoções</small><strong>0</strong></div></div>
+        <div className="profile-row"><ShieldCheck size={18} /><div><small>Segurança e conta</small><strong>0</strong></div></div>
+        <div className="profile-row"><Send size={18} /><div><small>Envios concluídos</small><strong>0</strong></div></div>
+        <div className="profile-row"><RefreshCw size={18} /><div><small>Actualização da aplicação</small><strong>0</strong></div></div>
+      </div>
+      <div className="profile-subheading">Tema</div>
+      <div className="profile-theme-grid">
+        <button className="profile-theme selected"><Sun size={17} /><span>Claro</span></button>
+        <button className="profile-theme" disabled><Moon size={17} /><span>Escuro</span></button>
+        <button className="profile-theme" disabled><Smartphone size={17} /><span>Automático</span></button>
+      </div>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section-heading"><h2>Segurança e ajustes</h2></div>
+      <div className="profile-list">
+        <div className="profile-row"><LockKeyhole size={18} /><div><small>Bloqueio da aplicação</small><strong>Disponível em breve</strong></div></div>
+        <button className="profile-row profile-row-action" onClick={() => setShowPinInfo((value) => !value)}><ShieldCheck size={18} /><div><small>PIN do destinatário</small><strong>Segurança da entrega</strong></div><ChevronRight size={17} /></button>
+        {showPinInfo && <div className="profile-inline-info">O PIN do destinatário é usado para confirmar a entrega. A geração e verificação do PIN são geridas pelo serviço de entregas.</div>}
+      </div>
+    </section>
+
+    <section className="profile-section">
+      <div className="profile-section-heading"><h2>Ajuda</h2></div>
+      <div className="profile-help-group"><strong>PegaJá</strong>
+        <button className="profile-row profile-row-action"><MessageCircle size={18} /><div><span>Pergunta à Paula</span></div><ChevronRight size={17} /></button>
+        <button className="profile-row profile-row-action"><MessageCircle size={18} /><div><span>Linha de suporte</span></div><ChevronRight size={17} /></button>
+        <a className="profile-row profile-row-action" href="https://wa.me/244958316486" target="_blank" rel="noreferrer"><MessageCircle size={18} /><div><span>WhatsApp</span></div><ChevronRight size={17} /></a>
+      </div>
+      <div className="profile-help-group emergency-group"><strong>Emergência</strong>
+        <a className="profile-row profile-row-action emergency-row" href="tel:112"><Phone size={18} /><div><span>112&nbsp; Ambulância</span></div><ChevronRight size={17} /></a>
+        <a className="profile-row profile-row-action emergency-row" href="tel:118"><Phone size={18} /><div><span>118&nbsp; Bombeiros</span></div><ChevronRight size={17} /></a>
+        <a className="profile-row profile-row-action emergency-row" href="tel:110"><Phone size={18} /><div><span>110&nbsp; Polícia</span></div><ChevronRight size={17} /></a>
+      </div>
+    </section>
+
+    <section className="profile-section profile-account-section">
+      <div className="profile-section-heading"><h2>Legal</h2></div>
+      <div className="profile-list">
+        <button className="profile-row profile-row-action"><FileText size={18} /><div><span>Termos de Uso</span></div><ChevronRight size={17} /></button>
+        <button className="profile-row profile-row-action"><FileText size={18} /><div><span>Política de Privacidade</span></div><ChevronRight size={17} /></button>
+        <button className="profile-row profile-row-action"><FileText size={18} /><div><span>Política de Reembolso</span></div><ChevronRight size={17} /></button>
+      </div>
+      <div className="profile-app-version">Aplicação · v0.1.0</div>
+      <button className="profile-row profile-logout" onClick={() => void supabase.auth.signOut()}><LogOut size={18} /><span>Terminar sessão</span></button>
+      <button className="profile-delete" disabled><Trash2 size={17} /><span>Eliminar conta</span></button>
+    </section>
+
+    {editOpen && <div className="modal-backdrop"><div className="modal-sheet profile-edit-sheet">
+      <div className="modal-header"><div><p className="eyebrow">Dados pessoais</p><h2>Editar perfil</h2></div><button className="icon-button" onClick={() => setEditOpen(false)} aria-label="Fechar"><X size={20} /></button></div>
+      <form className="stack" onSubmit={saveProfile}>
+        <label>Nome<input value={editName} onChange={(e) => setEditName(e.target.value)} autoComplete="name" /></label>
+        <label>Telefone<input value={editPhone.replace(/^\\+244/, '')} onChange={(e) => setEditPhone(e.target.value)} inputMode="numeric" autoComplete="tel-national" placeholder="9XX XXX XXX" /></label>
+        <label>Email<input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} type="email" autoComplete="email" /></label>
+        <div className="profile-verification-note"><ShieldCheck size={17} /> Alterações de telefone e email exigem verificação.</div>
+        <button className="primary" disabled={busy}>{busy ? 'A guardar…' : 'Guardar alterações'}</button>
+      </form>
+    </div></div>}
+  </section>;
+}
 
 function PaulaModal({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState('');
