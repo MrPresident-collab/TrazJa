@@ -32,7 +32,7 @@ function App() {
   const [splashSeen, setSplashSeen] = useState(() => sessionStorage.getItem('pegaja-splash-seen') === '1');
   const [welcomeSeen, setWelcomeSeen] = useState(() => sessionStorage.getItem('pegaja-welcome-seen') === '1');
   const [signupPending, setSignupPending] = useState(() => sessionStorage.getItem('pegaja-signup-pending') === '1');
-  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'email' | 'email-otp' | 'signup-form' | 'signup-otp'>('phone');
+  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'email' | 'signup-form' | 'signup-otp'>('phone');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [signupData, setSignupData] = useState<SignupData | null>(() => {
@@ -102,19 +102,6 @@ function App() {
         setSignupPending(true);
         setAuthStep('signup-form');
       }}
-      onVisitor={() => {
-        sessionStorage.setItem('pegaja-welcome-seen', '1');
-        void supabase.auth.signInAnonymously({
-          options: { data: { full_name: 'Visitante' } },
-        }).then(({ data, error }) => {
-          if (error || !data.session) {
-            console.error('PegaJá visitor access:', error);
-            sessionStorage.removeItem('pegaja-welcome-seen');
-            setWelcomeSeen(false);
-            setAuthStep('phone');
-          }
-        });
-      }}
     />;
   }
 
@@ -127,16 +114,7 @@ function App() {
       onBack={() => setWelcomeSeen(false)}
       onContinue={(nextEmail) => {
         setEmail(nextEmail);
-        setAuthStep('email-otp');
       }}
-    />;
-  }
-
-  if (!session?.user && authStep === 'email-otp') {
-    return <EmailVerificationScreen
-      email={email}
-      onBack={() => setAuthStep('email')}
-      onChangeEmail={() => setAuthStep('email')}
     />;
   }
 
@@ -184,18 +162,6 @@ function App() {
         setWelcomeSeen(true);
         setSignupPending(true);
         setAuthStep('signup-form');
-      }}
-      onVisitor={() => {
-        sessionStorage.setItem('pegaja-welcome-seen', '1');
-        void supabase.auth.signInAnonymously({
-          options: { data: { full_name: 'Visitante' } },
-        }).then(({ error }) => {
-          if (error) {
-            console.error('PegaJá visitor access:', error);
-            sessionStorage.removeItem('pegaja-welcome-seen');
-            setWelcomeSeen(false);
-          }
-        });
       }}
     />;
   }
@@ -619,13 +585,22 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
 
 function AuthScreen({ onBack, onContinue }: { onBack: () => void; onContinue: (email: string) => void }) {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const normalizedEmail = email.trim().toLowerCase();
-    if (busy || !normalizedEmail) return;
+    if (busy || !normalizedEmail || !password) return;
     setBusy(true);
+    setError('');
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+    if (authError) {
+      setError('Email ou palavra-passe inválidos.');
+      setBusy(false);
+      return;
+    }
     onContinue(normalizedEmail);
   };
 
@@ -634,100 +609,16 @@ function AuthScreen({ onBack, onContinue }: { onBack: () => void; onContinue: (e
       <button className="text-button auth-back" onClick={onBack} type="button">← Voltar</button>
       <div className="brand-mark">P<span>J</span></div>
       <p className="eyebrow">Entrar com email</p>
-      <h1>Verificar email.</h1>
-      <p className="muted">Enviaremos um código de acesso para o email associado à tua conta PegaJá.</p>
+      <h1>Acede à tua conta.</h1>
+      <p className="muted">Acesso de desenvolvimento com as credenciais existentes no Supabase.</p>
       <form onSubmit={submit} className="stack">
         <label>Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoCapitalize="none" spellCheck={false} placeholder="nome@exemplo.com" /></label>
-        <button className="primary" disabled={busy}>{busy ? 'A preparar…' : 'CONTINUAR'}</button>
+        <label>Palavra-passe<input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" placeholder="Palavra-passe" /></label>
+        {error && <p className="error">{error}</p>}
+        <button className="primary" disabled={busy || !email.trim() || !password}>{busy ? 'A entrar…' : 'ENTRAR'}</button>
       </form>
-      <p className="microcopy">O email é uma forma secundária de acesso. A tua conta PegaJá continua associada ao número de telefone.</p>
+      <p className="microcopy">Este método não cria contas e destina-se apenas ao desenvolvimento.</p>
     </div>
-  </main>;
-}
-
-function EmailVerificationScreen({ email, onBack, onChangeEmail }: { email: string; onBack: () => void; onChangeEmail: () => void }) {
-  const [code, setCode] = useState('');
-  const [secondsLeft, setSecondsLeft] = useState(60);
-  const [expirySeconds, setExpirySeconds] = useState(3600);
-  const [busy, setBusy] = useState(true);
-  const [resending, setResending] = useState(false);
-  const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const sendCode = async () => {
-    setError('');
-    setResending(true);
-    const { error: otpError } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-    if (otpError) setError('Não foi possível enviar o código. Confirma o email e tenta novamente.');
-    else { setSecondsLeft(60); setExpirySeconds(3600); }
-    setResending(false);
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    const sendInitialCode = async () => {
-      setError('');
-      const { error: otpError } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-      if (cancelled) return;
-      if (otpError) setError('Não foi possível enviar o código. Confirma o email e tenta novamente.');
-      setBusy(false);
-      inputRef.current?.focus();
-    };
-    void sendInitialCode();
-    return () => { cancelled = true; };
-  }, [email]);
-
-  useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const timer = window.setInterval(() => setSecondsLeft((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearInterval(timer);
-  }, [secondsLeft]);
-
-  useEffect(() => {
-    if (expirySeconds <= 0) return;
-    const timer = window.setInterval(() => setExpirySeconds((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearInterval(timer);
-  }, [expirySeconds]);
-
-  useEffect(() => {
-    if (code.length !== 6 || busy || resending) return;
-    let cancelled = false;
-    const verify = async () => {
-      setBusy(true);
-      setError('');
-      const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
-      if (cancelled) return;
-      if (verifyError) {
-        setError('O código não é válido ou já expirou.');
-        setCode('');
-        setBusy(false);
-        inputRef.current?.focus();
-      }
-    };
-    void verify();
-    return () => { cancelled = true; };
-  }, [code, email, busy, resending]);
-
-  const handleCodeChange = (value: string) => {
-    setError('');
-    setCode(value.replace(/\D/g, '').slice(0, 6));
-  };
-
-  return <main className="phone-verify-screen">
-    <div className="phone-verify-top"><button className="text-button phone-verify-back" onClick={onBack} aria-label="Voltar">←</button></div>
-    <section className="phone-verify-content">
-      <p className="eyebrow">Entrar com email</p>
-      <h1>Verificar email</h1>
-      <p className="phone-verify-copy">Enviámos um código de acesso<br />para</p>
-      <strong className="phone-verify-number">{email}</strong>
-      <label className="sr-only" htmlFor="email-otp">Código de verificação</label>
-      <div className="otp-slots" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className={code[index] ? 'filled' : ''}>{code[index] || '_'}</span>)}</div>
-      <input ref={inputRef} id="email-otp" className="otp-input" type="tel" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => handleCodeChange(event.target.value)} disabled={busy || resending} aria-label="Código de 6 dígitos" />
-      <p className="otp-expiry">O código expira em {Math.floor(expirySeconds / 3600)}:{String(Math.floor((expirySeconds % 3600) / 60)).padStart(2, '0')}</p>
-      {error && <p className="error phone-verify-error">{error}</p>}
-      <div className="otp-resend"><span>Não recebeste o código?</span><button className="text-button" onClick={sendCode} disabled={secondsLeft > 0 || resending}>{resending ? 'A reenviar…' : 'Reenviar código'}</button></div>
-      <button className="change-phone" onClick={onChangeEmail}>Usar outro email</button>
-    </section>
   </main>;
 }
 
