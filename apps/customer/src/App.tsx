@@ -31,12 +31,15 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [splashSeen, setSplashSeen] = useState(() => sessionStorage.getItem('pegaja-splash-seen') === '1');
   const [welcomeSeen, setWelcomeSeen] = useState(() => sessionStorage.getItem('pegaja-welcome-seen') === '1');
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'email' | 'signup'>('phone');
+  const [phone, setPhone] = useState('');
   useEffect(() => { supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthLoading(false); }); const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next)); return () => data.subscription.unsubscribe(); }, []);
   if (authLoading) return <FullPage message="A preparar o PegaJá…" />;
   if (!session?.user && !splashSeen) return <SplashScreen onStart={() => { sessionStorage.setItem('pegaja-splash-seen', '1'); setSplashSeen(true); }} />;
-  if (!session?.user && !welcomeSeen) return <WelcomeScreen onEnter={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthMode('signin'); }} onCreateAccount={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthMode('signup'); }} />;
-  if (!session?.user) return <AuthScreen mode={authMode} onBack={() => setWelcomeSeen(false)} />;
+  if (!session?.user && !welcomeSeen) return <WelcomeScreen onPhoneContinue={(nextPhone) => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setPhone(nextPhone); setAuthStep('otp'); }} onEmailContinue={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthStep('email'); }} onCreateAccount={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthStep('signup'); }} />;
+  if (!session?.user && authStep === 'otp') return <PhoneVerificationScreen phone={phone} onBack={() => setWelcomeSeen(false)} onChangeNumber={() => setWelcomeSeen(false)} />;
+  if (!session?.user && authStep === 'email') return <AuthScreen mode="signin" onBack={() => setWelcomeSeen(false)} />;
+  if (!session?.user && authStep === 'signup') return <AuthScreen mode="signup" onBack={() => setWelcomeSeen(false)} />;
   return <CustomerShell user={session.user} />;
 }
 
@@ -52,8 +55,25 @@ function SplashScreen({ onStart }: { onStart: () => void }) {
   </main>;
 }
 
-function WelcomeScreen({ onEnter, onCreateAccount }: { onEnter: () => void; onCreateAccount: () => void }) {
+function normalizeAngolaPhone(value: string) {
+  const digits = value.replace(/\\D/g, '');
+  const local = digits.startsWith('244') ? digits.slice(3) : digits;
+  return local.length === 9 ? `+244${local}` : '';
+}
+
+function formatAngolaPhone(phone: string) {
+  const digits = phone.replace(/\\D/g, '').replace(/^244/, '').slice(0, 9);
+  return digits.length === 9 ? `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}` : `+244 ${digits}`;
+}
+
+function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: { onPhoneContinue: (phone: string) => void; onEmailContinue: () => void; onCreateAccount: () => void }) {
   const [phone, setPhone] = useState('');
+  const normalizedPhone = normalizeAngolaPhone(phone);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!normalizedPhone) return;
+    onPhoneContinue(normalizedPhone);
+  };
   return <main className="welcome-screen">
     <div className="welcome-image-wrap">
       <img
@@ -66,26 +86,126 @@ function WelcomeScreen({ onEnter, onCreateAccount }: { onEnter: () => void; onCr
       <p className="welcome-tagline">Tudo que precisa ir, Chega!</p>
       <p className="welcome-support">Você prepara.<br />Nós entregamos.</p>
     </section>
-    <form className="welcome-auth" onSubmit={(event) => { event.preventDefault(); onEnter(); }}>
+    <form className="welcome-auth" onSubmit={submit}>
       <label htmlFor="welcome-phone">Telefone</label>
       <div className="phone-input">
         <span>+244</span>
         <input
           id="welcome-phone"
           type="tel"
-          inputMode="tel"
-          autoComplete="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
           placeholder="9XX XXX XXX"
           value={phone}
-          onChange={(event) => setPhone(event.target.value.replace(/[^0-9 ]/g, '').slice(0, 11))}
+          onChange={(event) => setPhone(event.target.value.replace(/\\D/g, '').slice(0, 9))}
           aria-label="Número de telefone"
         />
       </div>
-      <button className="primary welcome-continue" type="submit" disabled={!phone.trim()}>CONTINUAR</button>
+      <button className="primary welcome-continue" type="submit" disabled={!normalizedPhone}>CONTINUAR</button>
     </form>
     <div className="welcome-divider"><span>ou</span></div>
-    <button className="welcome-email" onClick={onEnter}>Continuar com Email</button>
+    <button className="welcome-email" onClick={onEmailContinue}>Continuar com Email</button>
     <p className="welcome-create">Não tens conta? <button onClick={onCreateAccount}>Criar conta</button></p>
+  </main>;
+}
+
+function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: string; onBack: () => void; onChangeNumber: () => void }) {
+  const [code, setCode] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [busy, setBusy] = useState(true);
+  const [resending, setResending] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const sendCode = async () => {
+    setError('');
+    setResending(true);
+    const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
+    if (otpError) {
+      setError('Não foi possível enviar o código. Tenta novamente.');
+    } else {
+      setSecondsLeft(60);
+    }
+    setResending(false);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const sendInitialCode = async () => {
+      setError('');
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
+      if (cancelled) return;
+      if (otpError) setError('Não foi possível enviar o código. Tenta novamente.');
+      setBusy(false);
+      inputRef.current?.focus();
+    };
+    void sendInitialCode();
+    return () => { cancelled = true; };
+  }, [phone]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const timer = window.setInterval(() => setSecondsLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [secondsLeft]);
+
+  useEffect(() => {
+    if (code.length !== 6 || busy || resending) return;
+    let cancelled = false;
+    const verify = async () => {
+      setBusy(true);
+      setError('');
+      const { error: verifyError } = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
+      if (cancelled) return;
+      if (verifyError) {
+        setError('O código não é válido ou já expirou.');
+        setCode('');
+        setBusy(false);
+        inputRef.current?.focus();
+      }
+    };
+    void verify();
+    return () => { cancelled = true; };
+  }, [code, phone, busy, resending]);
+
+  const handleCodeChange = (value: string) => {
+    setError('');
+    setCode(value.replace(/\\D/g, '').slice(0, 6));
+  };
+
+  return <main className="phone-verify-screen">
+    <div className="phone-verify-top">
+      <button className="text-button phone-verify-back" onClick={onBack} aria-label="Voltar">←</button>
+    </div>
+    <section className="phone-verify-content">
+      <h1>Verificar número</h1>
+      <p className="phone-verify-copy">Enviámos um código de 6 dígitos<br />para</p>
+      <strong className="phone-verify-number">{formatAngolaPhone(phone)}</strong>
+      <label className="sr-only" htmlFor="phone-otp">Código de verificação</label>
+      <div className="otp-slots" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, index) => <span key={index} className={code[index] ? 'filled' : ''}>{code[index] || '_'}</span>)}
+      </div>
+      <input
+        ref={inputRef}
+        id="phone-otp"
+        className="otp-input"
+        type="tel"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        value={code}
+        onChange={(event) => handleCodeChange(event.target.value)}
+        disabled={busy || resending}
+        aria-label="Código de 6 dígitos"
+      />
+      <p className="otp-expiry">O código expira em {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}</p>
+      {error && <p className="error phone-verify-error">{error}</p>}
+      <div className="otp-resend">
+        <span>Não recebeste o código?</span>
+        <button className="text-button" onClick={sendCode} disabled={secondsLeft > 0 || resending}>{resending ? 'A reenviar…' : 'Reenviar código'}</button>
+      </div>
+      <button className="change-phone" onClick={onChangeNumber}>Alterar número</button>
+    </section>
   </main>;
 }
 
