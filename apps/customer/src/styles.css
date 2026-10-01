@@ -32,3 +32,23 @@
 .welcome-create button{background:transparent;color:var(--orange);font-weight:700;padding:0}
 .auth-back{margin-bottom:16px}
 @media(min-width:640px){.welcome-screen{width:390px;min-height:844px;margin:0 auto;box-shadow:0 20px 60px rgba(23,23,23,.08)}.welcome-image-wrap{height:355px}}
+
+
+.phone-verify-screen{min-height:100svh;background:var(--warm-white);color:var(--coal);display:flex;flex-direction:column;padding:20px 24px max(30px,env(safe-area-inset-bottom))}
+.phone-verify-top{display:flex;align-items:center;min-height:44px}
+.phone-verify-back{font-size:28px;line-height:1;padding:4px 8px;color:var(--coal)}
+.phone-verify-content{width:min(390px,100%);margin:clamp(42px,10vh,86px) auto 0;text-align:center}
+.phone-verify-content h1{font-size:30px;margin:0 0 16px}
+.phone-verify-copy{margin:0;color:var(--metal);font-size:15px;line-height:1.5}
+.phone-verify-number{display:block;margin:8px 0 34px;font-size:17px;letter-spacing:.02em}
+.otp-slots{display:flex;justify-content:center;gap:8px;margin:0 auto 10px}
+.otp-slots span{width:44px;height:54px;background:var(--white);border:1px solid #D9D0C8;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--metal)}
+.otp-slots span.filled{color:var(--coal);border-color:var(--orange)}
+.otp-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.otp-expiry{margin:16px 0 30px;color:var(--metal);font-size:13px}
+.otp-resend{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--metal);font-size:13px}
+.otp-resend .text-button{padding:4px 0}
+.change-phone{margin-top:28px;background:transparent;color:var(--orange);font-size:14px;font-weight:700;padding:8px}
+.phone-verify-error{justify-content:center;margin:0 0 18px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(min-width:640px){.phone-verify-screen{width:390px;min-height:844px;margin:0 auto;box-shadow:0 20px 60px rgba(23,23,23,.08)}}
