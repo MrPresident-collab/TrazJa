@@ -166,3 +166,51 @@
 .scheduled-main{width:100%;background:transparent;text-align:left;color:var(--coal);padding:0}.scheduled-main>div{display:flex;flex-direction:column;gap:5px}.scheduled-main strong{font-size:14px}.scheduled-main span{display:flex;align-items:center;gap:3px;color:var(--metal);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.scheduled-main small{font-size:11px;color:var(--orange);font-weight:700}
 .scheduled-actions{display:flex;justify-content:flex-end;gap:18px;border-top:1px solid #ECE7E1;margin-top:13px;padding-top:10px}.danger-text{color:var(--danger)}
 @media(min-width:640px){.activities-page{padding-left:32px;padding-right:32px}}
+
+/* Customer Profile — structured, calm, left-aligned */
+.profile-page{max-width:720px;margin:0 auto;padding:22px 20px 38px;display:flex;flex-direction:column;gap:26px}
+.profile-identity{display:flex;align-items:center;gap:14px;padding:4px 0}
+.profile-avatar{width:64px;height:64px;border-radius:50%;border:1.5px solid var(--metal);background:var(--coal);color:var(--white);display:flex;align-items:center;justify-content:center;flex:0 0 64px}
+.profile-identity-main{min-width:0;flex:1}
+.profile-identity-main h1{font-size:22px;margin:0 0 5px}
+.profile-identity-line{font-size:12px;color:var(--metal);line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-identity-line .verified{color:var(--coal)}
+.profile-edit-button{flex:0 0 40px;width:40px;height:40px}
+.profile-message{margin-top:-12px}
+.profile-section{display:flex;flex-direction:column;gap:11px}
+.profile-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.profile-section-heading h2{margin:0;font-size:18px}
+.profile-list{display:flex;flex-direction:column;background:var(--white);border:1px solid #DDD6CF;border-radius:16px;overflow:hidden}
+.profile-row{width:100%;min-height:62px;padding:12px 14px;display:flex;align-items:center;gap:12px;background:var(--white);color:var(--coal);text-align:left;border-bottom:1px solid #ECE7E1}
+.profile-row:last-child{border-bottom:0}
+.profile-row>svg:first-child{color:var(--metal);flex:0 0 auto}
+.profile-row>div{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.profile-row small{font-size:10px;color:var(--metal)}
+.profile-row strong,.profile-row span{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-row-action{cursor:pointer}
+.profile-row-action:hover{background:#FBFAF8}
+.profile-add-row{width:100%;min-height:56px;padding:12px 14px;display:flex;align-items:center;gap:10px;background:var(--white);color:var(--orange);font-weight:700;text-align:left}
+.profile-payment-list{display:flex;flex-direction:column;gap:8px}
+.profile-payment{min-height:58px;padding:12px 14px;background:var(--white);border:1px solid #DDD6CF;border-radius:14px;display:flex;align-items:center;gap:12px}
+.profile-payment svg{color:var(--orange)}
+.profile-payment strong{font-size:13px}
+.profile-payment span{margin-left:auto;color:var(--metal);font-size:12px;font-weight:700}
+.profile-subheading{font-size:12px;font-weight:700;color:var(--metal);margin-top:5px}
+.profile-theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.profile-theme{min-height:48px;border:1px solid #DDD6CF;border-radius:12px;background:var(--white);display:flex;align-items:center;justify-content:center;gap:7px;color:var(--metal);font-weight:700}
+.profile-theme.selected{border-color:var(--orange);color:var(--orange);box-shadow:0 0 0 2px #F28C2822}
+.profile-inline-info,.profile-verification-note{padding:12px 14px;background:#F7F5F1;border:1px solid #DDD6CF;border-radius:12px;color:var(--metal);font-size:12px;line-height:1.45;display:flex;gap:9px;align-items:flex-start}
+.profile-help-group{display:flex;flex-direction:column;gap:8px}
+.profile-help-group>strong{font-size:12px;color:var(--metal);padding-left:2px}
+.profile-help-group .profile-row{border:1px solid #DDD6CF;border-radius:14px}
+.emergency-group{margin-top:8px}
+.emergency-row{color:var(--coal)}
+.emergency-row svg{color:var(--orange)}
+.profile-account-section{padding-bottom:12px}
+.profile-app-version{font-size:11px;color:var(--metal);padding:2px 2px 0}
+.profile-logout{margin-top:4px;border:1px solid #DDD6CF;border-radius:14px;justify-content:center;font-weight:700}
+.profile-logout svg{color:var(--orange)}
+.profile-delete{min-height:48px;background:transparent;color:var(--danger);display:flex;align-items:center;justify-content:center;gap:7px;font-weight:700}
+.profile-edit-sheet{padding-bottom:28px}
+@media(max-width:390px){.profile-page{padding-left:16px;padding-right:16px}.profile-theme-grid{grid-template-columns:1fr}.profile-identity-main h1{font-size:20px}}
+@media(min-width:640px){.profile-page{padding-left:32px;padding-right:32px}}
