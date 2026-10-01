@@ -30,10 +30,13 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [splashSeen, setSplashSeen] = useState(() => sessionStorage.getItem('pegaja-splash-seen') === '1');
+  const [welcomeSeen, setWelcomeSeen] = useState(() => sessionStorage.getItem('pegaja-welcome-seen') === '1');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   useEffect(() => { supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthLoading(false); }); const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next)); return () => data.subscription.unsubscribe(); }, []);
   if (authLoading) return <FullPage message="A preparar o PegaJá…" />;
   if (!session?.user && !splashSeen) return <SplashScreen onStart={() => { sessionStorage.setItem('pegaja-splash-seen', '1'); setSplashSeen(true); }} />;
-  if (!session?.user) return <AuthScreen />;
+  if (!session?.user && !welcomeSeen) return <WelcomeScreen onEnter={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthMode('signin'); }} onCreateAccount={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthMode('signup'); }} />;
+  if (!session?.user) return <AuthScreen mode={authMode} onBack={() => setWelcomeSeen(false)} />;
   return <CustomerShell user={session.user} />;
 }
 
@@ -49,10 +52,57 @@ function SplashScreen({ onStart }: { onStart: () => void }) {
   </main>;
 }
 
-function AuthScreen() {
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  const submit = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); const { error: authError } = await supabase.auth.signInWithPassword({ email, password }); if (authError) setError(authError.message); setBusy(false); };
-  return <main className="auth-page"><div className="auth-card"><div className="brand-mark">T<span>J</span></div><p className="eyebrow">Tudo que precisa ir, chega.</p><h1>Envia sem complicar.</h1><p className="muted">Entra para criar envios, acompanhar o estafeta e guardar os teus destinos.</p><form onSubmit={submit} className="stack"><label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label><label>Password<input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>{error && <p className="error">Não foi possível entrar: {error}</p>}<button className="primary" disabled={busy}>{busy ? 'A entrar…' : 'Entrar'}</button></form><p className="microcopy">A autenticação é gerida pelo Supabase Auth.</p></div></main>;
+function WelcomeScreen({ onEnter, onCreateAccount }: { onEnter: () => void; onCreateAccount: () => void }) {
+  return <main className="welcome-screen">
+    <div className="welcome-image-wrap">
+      <img
+        src="https://images.pexels.com/photos/6868626/pexels-photo-6868626.jpeg?cs=srgb&dl=pexels-kindelmedia-6868626.jpg&fm=jpg"
+        alt="Mulher africana a receber uma encomenda de um estafeta"
+        className="welcome-image"
+      />
+    </div>
+    <section className="welcome-copy">
+      <p className="welcome-kicker">Bem-vindo ao</p>
+      <h1>PegaJá</h1>
+      <p className="welcome-tagline">Tudo que precisa ir, Chega!</p>
+      <p className="welcome-support">Você prepara. Nós entregamos.</p>
+    </section>
+    <div className="welcome-actions">
+      <button className="primary" onClick={onEnter}>Entrar</button>
+      <button className="secondary" onClick={onCreateAccount}>Criar conta</button>
+    </div>
+    <button className="guest-button" type="button" onClick={() => window.alert('A experiência de convidado será ativada nesta etapa.')}>Continuar como convidado</button>
+  </main>;
+}
+
+function AuthScreen({ mode, onBack }: { mode: 'signin' | 'signup'; onBack: () => void }) {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
+    const result = mode === 'signup'
+      ? await supabase.auth.signUp({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) setError(result.error.message);
+    else if (mode === 'signup' && !result.data.session) setMessage('Conta criada. Verifica o teu email para confirmar o acesso.');
+    setBusy(false);
+  };
+  return <main className="auth-page">
+    <div className="auth-card">
+      <button className="text-button auth-back" onClick={onBack}>← Voltar</button>
+      <div className="brand-mark">P<span>J</span></div>
+      <p className="eyebrow">{mode === 'signup' ? 'Criar conta' : 'Entrar'}</p>
+      <h1>{mode === 'signup' ? 'Começa com o PegaJá.' : 'Bem-vindo de volta.'}</h1>
+      <p className="muted">{mode === 'signup' ? 'Cria a tua conta para preparar envios e acompanhar cada entrega.' : 'Entra para criar envios, acompanhar o estafeta e guardar os teus destinos.'}</p>
+      <form onSubmit={submit} className="stack">
+        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
+        <label>Password<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>
+        {error && <p className="error">Não foi possível continuar: {error}</p>}
+        {message && <p className="success">{message}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'A processar…' : mode === 'signup' ? 'Criar conta' : 'Entrar'}</button>
+      </form>
+      <p className="microcopy">A autenticação é gerida pelo Supabase Auth.</p>
+    </div>
+  </main>;
 }
 
 function CustomerShell({ user }: { user: AuthUser }) {
