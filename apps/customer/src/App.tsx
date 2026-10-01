@@ -25,8 +25,6 @@ const statuses: Record<string, string> = { draft: 'Rascunho', quoted: 'Cotado', 
 const money = (value: number | null | undefined, currency = 'AOA') => value == null ? '—' : new Intl.NumberFormat('pt-AO', { style: 'currency', currency }).format(value);
 const unwrap = <T,>(value: T | T[] | null): T | null => Array.isArray(value) ? value[0] ?? null : value;
 const idempotency = () => `${crypto.randomUUID()}-${Date.now()}`;
-const DEV_TEST_EMAIL = import.meta.env.VITE_DEV_TEST_EMAIL || 'test@pegaja.dev';
-const DEV_TEST_PASSWORD = import.meta.env.VITE_DEV_TEST_PASSWORD || '';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -104,27 +102,18 @@ function App() {
         setSignupPending(true);
         setAuthStep('signup-form');
       }}
-      onTestLogin={import.meta.env.DEV && DEV_TEST_PASSWORD ? async () => {
-        const { error } = await supabase.auth.signInWithPassword({ email: DEV_TEST_EMAIL, password: DEV_TEST_PASSWORD });
-        if (!error) {
-          sessionStorage.removeItem('pegaja-splash-seen');
-          sessionStorage.removeItem('pegaja-welcome-seen');
-          return;
-        }
-        const { data, error: signupError } = await supabase.auth.signUp({
-          email: DEV_TEST_EMAIL,
-          password: DEV_TEST_PASSWORD,
-          options: { data: { full_name: 'Conta de Teste PegaJá' } },
+      onVisitor={() => {
+        sessionStorage.setItem('pegaja-welcome-seen', '1');
+        void supabase.auth.signInAnonymously({
+          options: { data: { full_name: 'Visitante' } },
+        }).then(({ error }) => {
+          if (error) {
+            console.error('PegaJá visitor access:', error);
+            sessionStorage.removeItem('pegaja-welcome-seen');
+            setWelcomeSeen(false);
+          }
         });
-        if (signupError) {
-          console.error('PegaJá dev test account:', signupError);
-          return;
-        }
-        if (data.session) {
-          sessionStorage.removeItem('pegaja-splash-seen');
-          sessionStorage.removeItem('pegaja-welcome-seen');
-        }
-      } : undefined}
+      }}
     />;
   }
 
@@ -195,6 +184,18 @@ function App() {
         setSignupPending(true);
         setAuthStep('signup-form');
       }}
+      onVisitor={() => {
+        sessionStorage.setItem('pegaja-welcome-seen', '1');
+        void supabase.auth.signInAnonymously({
+          options: { data: { full_name: 'Visitante' } },
+        }).then(({ error }) => {
+          if (error) {
+            console.error('PegaJá visitor access:', error);
+            sessionStorage.removeItem('pegaja-welcome-seen');
+            setWelcomeSeen(false);
+          }
+        });
+      }}
     />;
   }
 
@@ -221,11 +222,11 @@ function formatAngolaPhone(phone: string) {
   return digits.length === 9 ? `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}` : `+244 ${digits}`;
 }
 
-function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount, onTestLogin }: {
+function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount, onVisitor }: {
   onPhoneContinue: (phone: string) => void;
   onEmailContinue: () => void;
   onCreateAccount: () => void;
-  onTestLogin?: () => void;
+  onVisitor: () => void;
 }) {
   const [phone, setPhone] = useState('');
   const normalizedPhone = normalizeAngolaPhone(phone);
@@ -263,9 +264,7 @@ function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount, onTe
         />
       </div>
       <button className="primary welcome-continue" type="submit" disabled={!normalizedPhone}>CONTINUAR</button>
-      {import.meta.env.DEV && onTestLogin && DEV_TEST_PASSWORD && (
-        <button className="secondary welcome-test-login" type="button" onClick={onTestLogin}>ENTRAR COMO CONTA DE TESTE</button>
-      )}
+      <button className="welcome-email" type="button" onClick={onVisitor}>Continuar como visitante</button>
     </form>
     <div className="welcome-divider"><span>ou</span></div>
     <button className="welcome-email" onClick={onEmailContinue}>Continuar com Email</button>
