@@ -422,7 +422,7 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
     let cancelled = false;
     const sendInitialCode = async () => {
       setError('');
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: false } });
       if (cancelled) return;
       if (otpError) setError('Não foi possível enviar o código. Tenta novamente.');
       setBusy(false);
