@@ -564,26 +564,80 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
 }
 
 function AuthScreen({ onBack }: { onBack: () => void }) {
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
   const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
-    const result = await supabase.auth.signInWithPassword({ email, password });
-    if (result.error) setError(result.error.message);
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+
+    const result = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password
+    });
+
+    if (result.error) {
+      setError('Email ou palavra-passe inválidos. Confirma os dados e tenta novamente.');
+    }
+
     setBusy(false);
   };
+
   return <main className="auth-page">
     <div className="auth-card">
-      <button className="text-button auth-back" onClick={onBack}>← Voltar</button>
+      <button className="text-button auth-back" onClick={onBack} type="button">← Voltar</button>
       <div className="brand-mark">P<span>J</span></div>
-      <p className="eyebrow">Entrar</p>
+      <p className="eyebrow">Entrar com email</p>
       <h1>Bem-vindo de volta.</h1>
-      <p className="muted">Entra com o email e a palavra-passe da tua conta PegaJá.</p>
+      <p className="muted">Usa o email e a palavra-passe da tua conta PegaJá.</p>
+
       <form onSubmit={submit} className="stack">
-        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Password<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        <label>
+          Email
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="nome@exemplo.com"
+          />
+        </label>
+
+        <label>
+          Palavra-passe
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            placeholder="A tua palavra-passe"
+          />
+        </label>
+
         {error && <p className="error">Não foi possível entrar: {error}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'A entrar…' : 'Entrar'}</button>
+
+        <button className="primary" disabled={busy}>
+          {busy ? 'A entrar…' : 'CONTINUAR'}
+        </button>
       </form>
+
+      <button
+        className="text-button auth-forgot"
+        type="button"
+        onClick={() => setError('A recuperação da palavra-passe será disponibilizada nesta área.')}
+      >
+        Esqueci-me da palavra-passe
+      </button>
+
       <p className="microcopy">A autenticação é gerida pelo Supabase Auth.</p>
     </div>
   </main>;
