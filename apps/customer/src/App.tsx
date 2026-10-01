@@ -53,6 +53,7 @@ function SplashScreen({ onStart }: { onStart: () => void }) {
 }
 
 function WelcomeScreen({ onEnter, onCreateAccount }: { onEnter: () => void; onCreateAccount: () => void }) {
+  const [phone, setPhone] = useState('');
   return <main className="welcome-screen">
     <div className="welcome-image-wrap">
       <img
@@ -62,15 +63,29 @@ function WelcomeScreen({ onEnter, onCreateAccount }: { onEnter: () => void; onCr
       />
     </div>
     <section className="welcome-copy">
-      <p className="welcome-kicker">Bem-vindo ao</p>
-      <h1>PegaJá</h1>
       <p className="welcome-tagline">Tudo que precisa ir, Chega!</p>
-      <p className="welcome-support">Você prepara. Nós entregamos.</p>
+      <p className="welcome-support">Você prepara.<br />Nós entregamos.</p>
     </section>
-    <div className="welcome-actions">
-      <button className="primary" onClick={onEnter}>Entrar</button>
-      <button className="secondary" onClick={onCreateAccount}>Criar conta</button>
-    </div>
+    <form className="welcome-auth" onSubmit={(event) => { event.preventDefault(); onEnter(); }}>
+      <label htmlFor="welcome-phone">Telefone</label>
+      <div className="phone-input">
+        <span>+244</span>
+        <input
+          id="welcome-phone"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="9XX XXX XXX"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value.replace(/[^0-9 ]/g, '').slice(0, 11))}
+          aria-label="Número de telefone"
+        />
+      </div>
+      <button className="primary welcome-continue" type="submit" disabled={!phone.trim()}>CONTINUAR</button>
+    </form>
+    <div className="welcome-divider"><span>ou</span></div>
+    <button className="welcome-email" onClick={onEnter}>Continuar com Email</button>
+    <p className="welcome-create">Não tens conta? <button onClick={onCreateAccount}>Criar conta</button></p>
   </main>;
 }
 
