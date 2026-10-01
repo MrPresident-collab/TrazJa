@@ -31,15 +31,19 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [splashSeen, setSplashSeen] = useState(() => sessionStorage.getItem('pegaja-splash-seen') === '1');
   const [welcomeSeen, setWelcomeSeen] = useState(() => sessionStorage.getItem('pegaja-welcome-seen') === '1');
-  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'email' | 'signup'>('phone');
+  const [signupPending, setSignupPending] = useState(() => sessionStorage.getItem('pegaja-signup-pending') === '1');
+  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'email' | 'signup-phone' | 'signup-otp'>('phone');
   const [phone, setPhone] = useState('');
   useEffect(() => { supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthLoading(false); }); const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next)); return () => data.subscription.unsubscribe(); }, []);
   if (authLoading) return <FullPage message="A preparar o PegaJá…" />;
+  if (session?.user && signupPending) return <SignupProfileScreen user={session.user} phone={phone || session.user.phone || ''} onComplete={() => { sessionStorage.removeItem('pegaja-signup-pending'); setSignupPending(false); setAuthStep('phone'); }} onCancel={async () => { await supabase.auth.signOut(); sessionStorage.removeItem('pegaja-signup-pending'); setSignupPending(false); setWelcomeSeen(false); setAuthStep('phone'); }} />;
   if (!session?.user && !splashSeen) return <SplashScreen onStart={() => { sessionStorage.setItem('pegaja-splash-seen', '1'); setSplashSeen(true); }} />;
-  if (!session?.user && !welcomeSeen) return <WelcomeScreen onPhoneContinue={(nextPhone) => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setPhone(nextPhone); setAuthStep('otp'); }} onEmailContinue={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthStep('email'); }} onCreateAccount={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthStep('signup'); }} />;
+  if (!session?.user && !welcomeSeen) return <WelcomeScreen onPhoneContinue={(nextPhone) => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setPhone(nextPhone); setAuthStep('otp'); }} onEmailContinue={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthStep('email'); }} onCreateAccount={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); sessionStorage.setItem('pegaja-signup-pending', '1'); setWelcomeSeen(true); setSignupPending(true); setAuthStep('signup-phone'); }} />;
   if (!session?.user && authStep === 'otp') return <PhoneVerificationScreen phone={phone} onBack={() => setWelcomeSeen(false)} onChangeNumber={() => setWelcomeSeen(false)} />;
-  if (!session?.user && authStep === 'email') return <AuthScreen mode="signin" onBack={() => setWelcomeSeen(false)} />;
-  if (!session?.user && authStep === 'signup') return <AuthScreen mode="signup" onBack={() => setWelcomeSeen(false)} />;
+  if (!session?.user && authStep === 'email') return <AuthScreen onBack={() => setWelcomeSeen(false)} />;
+  if (!session?.user && authStep === 'signup-phone') return <SignupPhoneScreen onContinue={(nextPhone) => { setPhone(nextPhone); setAuthStep('signup-otp'); }} onBack={() => { sessionStorage.removeItem('pegaja-signup-pending'); setSignupPending(false); setWelcomeSeen(false); setAuthStep('phone'); }} />;
+  if (!session?.user && authStep === 'signup-otp') return <SignupVerificationScreen phone={phone} onBack={() => setAuthStep('signup-phone')} onChangeNumber={() => setAuthStep('signup-phone')} />;
+  if (!session?.user) return <WelcomeScreen onPhoneContinue={(nextPhone) => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setPhone(nextPhone); setAuthStep('otp'); }} onEmailContinue={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); setWelcomeSeen(true); setAuthStep('email'); }} onCreateAccount={() => { sessionStorage.setItem('pegaja-welcome-seen', '1'); sessionStorage.setItem('pegaja-signup-pending', '1'); setWelcomeSeen(true); setSignupPending(true); setAuthStep('signup-phone'); }} />;
   return <CustomerShell user={session.user} />;
 }
 
@@ -109,6 +113,174 @@ function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: { 
   </main>;
 }
 
+function SignupPhoneScreen({ onContinue, onBack }: { onContinue: (phone: string) => void; onBack: () => void }) {
+  const [phone, setPhone] = useState('');
+  const normalizedPhone = normalizeAngolaPhone(phone);
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (normalizedPhone) onContinue(normalizedPhone);
+  };
+  return <main className="signup-screen">
+    <div className="signup-top">
+      <button className="text-button signup-back" onClick={onBack} aria-label="Voltar">←</button>
+    </div>
+    <section className="signup-content">
+      <p className="eyebrow">Criar conta</p>
+      <h1>Vamos começar.</h1>
+      <p className="signup-copy">Usa o teu número de telefone para criar a tua conta PegaJá.</p>
+      <form className="stack signup-form" onSubmit={submit}>
+        <label htmlFor="signup-phone">Telefone</label>
+        <div className="phone-input">
+          <span>+244</span>
+          <input id="signup-phone" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="9XX XXX XXX" value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 9))} aria-label="Número de telefone" />
+        </div>
+        <button className="primary" type="submit" disabled={!normalizedPhone}>CONTINUAR</button>
+      </form>
+      <p className="microcopy signup-security">O teu número será verificado por código SMS.</p>
+    </section>
+  </main>;
+}
+
+function SignupVerificationScreen({ phone, onBack, onChangeNumber }: { phone: string; onBack: () => void; onChangeNumber: () => void }) {
+  const [code, setCode] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [expirySeconds, setExpirySeconds] = useState(300);
+  const [busy, setBusy] = useState(true);
+  const [resending, setResending] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const sendCode = async () => {
+    setError('');
+    setResending(true);
+    const { error: otpError } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
+    if (otpError) setError('Não foi possível enviar o código. Tenta novamente.');
+    else { setSecondsLeft(60); setExpirySeconds(300); }
+    setResending(false);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const sendInitialCode = async () => {
+      setError('');
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });
+      if (cancelled) return;
+      if (otpError) setError('Não foi possível enviar o código. Tenta novamente.');
+      setBusy(false);
+      inputRef.current?.focus();
+    };
+    void sendInitialCode();
+    return () => { cancelled = true; };
+  }, [phone]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const timer = window.setInterval(() => setSecondsLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [secondsLeft]);
+
+  useEffect(() => {
+    if (expirySeconds <= 0) return;
+    const timer = window.setInterval(() => setExpirySeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [expirySeconds]);
+
+  useEffect(() => {
+    if (code.length !== 6 || busy || resending) return;
+    let cancelled = false;
+    const verify = async () => {
+      setBusy(true);
+      setError('');
+      const { error: verifyError } = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
+      if (cancelled) return;
+      if (verifyError) {
+        setError('O código não é válido ou já expirou.');
+        setCode('');
+        setBusy(false);
+        inputRef.current?.focus();
+      }
+    };
+    void verify();
+    return () => { cancelled = true; };
+  }, [code, phone, busy, resending]);
+
+  const handleCodeChange = (value: string) => {
+    setError('');
+    setCode(value.replace(/\D/g, '').slice(0, 6));
+  };
+
+  return <main className="phone-verify-screen signup-verify-screen">
+    <div className="phone-verify-top">
+      <button className="text-button phone-verify-back" onClick={onBack} aria-label="Voltar">←</button>
+    </div>
+    <section className="phone-verify-content">
+      <p className="eyebrow">Criar conta</p>
+      <h1>Verificar número</h1>
+      <p className="phone-verify-copy">Enviámos um código de 6 dígitos<br />para</p>
+      <strong className="phone-verify-number">{formatAngolaPhone(phone)}</strong>
+      <label className="sr-only" htmlFor="signup-otp">Código de verificação</label>
+      <div className="otp-slots" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, index) => <span key={index} className={code[index] ? 'filled' : ''}>{code[index] || '_'}</span>)}
+      </div>
+      <input ref={inputRef} id="signup-otp" className="otp-input" type="tel" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => handleCodeChange(event.target.value)} disabled={busy || resending} aria-label="Código de 6 dígitos" />
+      <p className="otp-expiry">O código expira em {Math.floor(expirySeconds / 60)}:{String(expirySeconds % 60).padStart(2, '0')}</p>
+      {error && <p className="error phone-verify-error">{error}</p>}
+      <div className="otp-resend">
+        <span>Não recebeste o código?</span>
+        <button className="text-button" onClick={sendCode} disabled={secondsLeft > 0 || resending}>{resending ? 'A reenviar…' : 'Reenviar código'}</button>
+      </div>
+      <button className="change-phone" onClick={onChangeNumber}>Alterar número</button>
+    </section>
+  </main>;
+}
+
+function SignupProfileScreen({ user, phone, onComplete, onCancel }: { user: AuthUser; phone: string; onComplete: () => void; onCancel: () => void }) {
+  const [fullName, setFullName] = useState(user.user_metadata?.full_name || '');
+  const [email, setEmail] = useState(user.email || '');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = fullName.trim();
+    if (!name) return;
+    setBusy(true);
+    setError('');
+    const { error: profileError } = await supabase.from('profiles').update({ full_name: name, phone: phone || user.phone || null, email: email.trim() || null }).eq('id', user.id);
+    if (profileError) {
+      setError('Não foi possível guardar os teus dados. Tenta novamente.');
+      setBusy(false);
+      return;
+    }
+    const { error: metadataError } = await supabase.auth.updateUser({ data: { full_name: name } });
+    if (metadataError) {
+      setError('A conta foi criada, mas não foi possível actualizar o nome de sessão. Tenta novamente.');
+      setBusy(false);
+      return;
+    }
+    onComplete();
+    setBusy(false);
+  };
+
+  return <main className="signup-screen">
+    <div className="signup-top">
+      <button className="text-button signup-back" onClick={onCancel}>← Voltar</button>
+    </div>
+    <section className="signup-content">
+      <p className="eyebrow">Criar conta</p>
+      <h1>Quase lá.</h1>
+      <p className="signup-copy">Só precisamos de alguns dados para preparar a tua conta.</p>
+      <form className="stack signup-form" onSubmit={submit}>
+        <label>Nome completo<input required value={fullName} onChange={(event) => setFullName(event.target.value)} autoComplete="name" placeholder="O teu nome" /></label>
+        <label>Email <span className="optional-label">(opcional)</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="nome@exemplo.com" /></label>
+        <div className="notice">O teu telefone já foi verificado: <strong>{formatAngolaPhone(phone || user.phone || '')}</strong></div>
+        {error && <p className="error">{error}</p>}
+        <button className="primary" type="submit" disabled={busy || !fullName.trim()}>{busy ? 'A guardar…' : 'Criar conta'}</button>
+      </form>
+    </section>
+  </main>;
+}
+
 function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: string; onBack: () => void; onChangeNumber: () => void }) {
   const [code, setCode] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(60);
@@ -121,7 +293,7 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
   const sendCode = async () => {
     setError('');
     setResending(true);
-    const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
+    const { error: otpError } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: false } });
     if (otpError) {
       setError('Não foi possível enviar o código. Tenta novamente.');
     } else {
@@ -217,30 +389,26 @@ function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: str
   </main>;
 }
 
-function AuthScreen({ mode, onBack }: { mode: 'signin' | 'signup'; onBack: () => void }) {
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
+function AuthScreen({ onBack }: { onBack: () => void }) {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setError(''); setMessage('');
-    const result = mode === 'signup'
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
+    event.preventDefault(); setBusy(true); setError('');
+    const result = await supabase.auth.signInWithPassword({ email, password });
     if (result.error) setError(result.error.message);
-    else if (mode === 'signup' && !result.data.session) setMessage('Conta criada. Verifica o teu email para confirmar o acesso.');
     setBusy(false);
   };
   return <main className="auth-page">
     <div className="auth-card">
       <button className="text-button auth-back" onClick={onBack}>← Voltar</button>
       <div className="brand-mark">P<span>J</span></div>
-      <p className="eyebrow">{mode === 'signup' ? 'Criar conta' : 'Entrar'}</p>
-      <h1>{mode === 'signup' ? 'Começa com o PegaJá.' : 'Bem-vindo de volta.'}</h1>
-      <p className="muted">{mode === 'signup' ? 'Cria a tua conta para preparar envios e acompanhar cada entrega.' : 'Entra para criar envios, acompanhar o estafeta e guardar os teus destinos.'}</p>
+      <p className="eyebrow">Entrar</p>
+      <h1>Bem-vindo de volta.</h1>
+      <p className="muted">Entra com o email e a palavra-passe da tua conta PegaJá.</p>
       <form onSubmit={submit} className="stack">
         <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Password<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>
-        {error && <p className="error">Não foi possível continuar: {error}</p>}
-        {message && <p className="success">{message}</p>}
-        <button className="primary" disabled={busy}>{busy ? 'A processar…' : mode === 'signup' ? 'Criar conta' : 'Entrar'}</button>
+        <label>Password<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        {error && <p className="error">Não foi possível entrar: {error}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'A entrar…' : 'Entrar'}</button>
       </form>
       <p className="microcopy">A autenticação é gerida pelo Supabase Auth.</p>
     </div>
