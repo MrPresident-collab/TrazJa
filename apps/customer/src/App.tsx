@@ -71,7 +71,6 @@ function WelcomeScreen({ onEnter, onCreateAccount }: { onEnter: () => void; onCr
       <button className="primary" onClick={onEnter}>Entrar</button>
       <button className="secondary" onClick={onCreateAccount}>Criar conta</button>
     </div>
-    <button className="guest-button" type="button" onClick={() => window.alert('A experiência de convidado será ativada nesta etapa.')}>Continuar como convidado</button>
   </main>;
 }
 
