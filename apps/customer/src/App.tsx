@@ -5,7 +5,7 @@ import type { Session, User as AuthUser } from '@supabase/supabase-js';
 
 type Address = { id: string; label: string | null; address_line: string; locality: string | null; city: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null };
 type ServiceLevel = { id: string; code: string; name: string; description: string | null; promised_minutes: number | null; same_day: boolean; scheduling_supported: boolean };
-type StopInput = { address_line: string; locality: string; city: string; contact_name: string; contact_phone: string; instructions: string };
+type StopInput = { address_line: string; locality: string; city: string; contact_name: string; contact_phone: string; alternative_contact_phone: string; instructions: string };
 type Delivery = { id: string; reference: string; status: string; quoted_amount: number | null; total_amount: number | null; currency: string; created_at: string; scheduled_for: string | null; service_level_id: string | null; delivery_stops: Array<{ id: string; sequence_no: number; stop_type: string; address_line: string; locality: string | null; city: string | null; contact_name: string | null; completed_at: string | null }>; delivery_packages: Array<{ id: string; description: string | null; package_type: string | null; fragile: boolean }> };
 type Notification = { id: string; title: string; body: string | null; read_at: string | null; created_at: string; type: string };
 type Draft = { id: string; reference: string; status: string };
@@ -720,37 +720,267 @@ function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: 
 function Step({ number, title, body }: { number: string; title: string; body: string }) { return <div className="step"><span>{number}</span><div><strong>{title}</strong><p>{body}</p></div></div>; }
 
 function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: AuthUser; addresses: Address[]; levels: ServiceLevel[]; onCancel: () => void; onCreated: () => void }) {
-  const [step, setStep] = useState(0); const [pickupId, setPickupId] = useState(addresses[0]?.id || ''); const [newPickup, setNewPickup] = useState({ address_line: '', locality: '', city: 'Luanda', contact_name: '', contact_phone: '', instructions: '' }); const [destination, setDestination] = useState({ address_line: '', locality: '', city: '', contact_name: '', contact_phone: '', instructions: '' }); const [stops, setStops] = useState<Array<typeof destination>>([]); const [pkg, setPkg] = useState({ package_type: '', package_size: '', description: '', weight_kg: '', declared_value: '', fragile: false }); const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState(''); const [levelId, setLevelId] = useState(levels[0]?.id || ''); const [scheduledFor, setScheduledFor] = useState(''); const [quote, setQuote] = useState<Quote | null>(null); const [draft, setDraft] = useState<Draft | null>(null); const [payment, setPayment] = useState<(typeof paymentOptions)[number]['value']>('cash'); const [gratuity, setGratuity] = useState('0'); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const cameraRef = useRef<HTMLInputElement>(null);
-  const selectedLevel = levels.find((item) => item.id === levelId); const pickup = addresses.find((address) => address.id === pickupId);
-  const canContinue = step === 0 ? Boolean((pickupId || (newPickup.address_line && newPickup.locality && newPickup.contact_name && newPickup.contact_phone)) && destination.address_line && destination.contact_name && destination.contact_phone && stops.every((stop) => stop.address_line && stop.contact_name && stop.contact_phone)) : step === 1 ? Boolean(pkg.package_type && pkg.package_size && pkg.description && file) : step === 2 ? Boolean(levelId) : Boolean(quote && payment);
-  const handleFile = (next: File | null) => { if (!next) return; if (!['image/jpeg', 'image/webp'].includes(next.type)) { setError('A evidência deve ser JPEG ou WebP.'); return; } setFile(next); setPreview(URL.createObjectURL(next)); setError(''); };
-  const addStop = () => setStops((current) => [...current, { address_line: '', locality: '', city: '', contact_name: '', contact_phone: '', instructions: '' }]);
-  const updateStop = (index: number, field: keyof typeof destination, value: string) => setStops((current) => current.map((stop, i) => i === index ? { ...stop, [field]: value } : stop));
-  const prepareQuote = async () => { setBusy(true); setError(''); try { const { data: draftData, error: draftError } = await supabase.rpc('create_delivery_draft', { p_idempotency_key: idempotency(), p_service_level_id: levelId, p_scheduled_for: scheduledFor ? new Date(scheduledFor).toISOString() : null, p_notes: destination.instructions || null }); if (draftError) throw draftError; const created = unwrap<Draft>(draftData); if (!created) throw new Error('Não conseguimos preparar o envio. Tenta novamente.'); setDraft(created); const stopRows = [{ delivery_id: created.id, sequence_no: 1, stop_type: 'pickup', address_id: pickup?.id || null, address_line: pickup?.address_line || '', locality: pickup?.locality || null, city: pickup?.city || null, contact_name: pickup?.contact_name || null, contact_phone: pickup?.contact_phone || null, instructions: pickup?.instructions || null }, ...stops.map((stop, index) => ({ delivery_id: created.id, sequence_no: index + 2, stop_type: 'waypoint', address_id: null, address_line: stop.address_line, locality: stop.locality || null, city: stop.city || null, contact_name: stop.contact_name, contact_phone: stop.contact_phone, instructions: stop.instructions || null })), { delivery_id: created.id, sequence_no: stops.length + 2, stop_type: 'dropoff', address_id: null, address_line: destination.address_line, locality: destination.locality || null, city: destination.city || null, contact_name: destination.contact_name, contact_phone: destination.contact_phone, instructions: destination.instructions || null }]; const { data: stopData, error: stopError } = await supabase.from('delivery_stops').insert(stopRows).select('id,sequence_no,stop_type').order('sequence_no'); if (stopError) throw stopError; const { data: packageData, error: packageError } = await supabase.from('delivery_packages').insert({ delivery_id: created.id, package_type: pkg.package_type, metadata: { package_size: pkg.package_size }, description: pkg.description, weight_kg: pkg.weight_kg ? Number(pkg.weight_kg) : null, declared_value: pkg.declared_value ? Number(pkg.declared_value) : null, fragile: pkg.fragile }).select('id').single(); if (packageError) throw packageError; const extension = file!.type === 'image/webp' ? 'webp' : 'jpg'; const objectPath = `${created.id}/${packageData.id}/${crypto.randomUUID()}.${extension}`; const { error: uploadError } = await supabase.storage.from('delivery-evidence').upload(objectPath, file!, { contentType: file!.type, upsert: false }); if (uploadError) throw uploadError; const { error: evidenceError } = await supabase.from('delivery_evidence').insert({ delivery_id: created.id, package_id: packageData.id, stop_id: stopData?.[0]?.id || null, bucket_id: 'delivery-evidence', object_path: objectPath, evidence_type: 'customer_package_photo', captured_by: user.id, metadata: { source: 'camera_capture_required', content_type: file!.type } }); if (evidenceError) throw evidenceError; const { data: quoteData, error: quoteError } = await supabase.rpc('calculate_delivery_quote', { p_delivery_id: created.id, p_service_level_id: levelId }); if (quoteError) throw quoteError; const nextQuote = unwrap<Quote>(quoteData); if (!nextQuote) throw new Error('Não conseguimos calcular o valor agora. Tenta novamente.'); setQuote(nextQuote); setStep(3); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível preparar o envio.'); } finally { setBusy(false); } };
-  const confirm = async () => { if (!draft || !quote) return; setBusy(true); setError(''); const { error: confirmError } = await supabase.rpc('confirm_delivery', { p_delivery_id: draft.id, p_payment_method: payment, p_gratuity_amount: 0 }); if (confirmError) setError(confirmError.message); else onCreated(); setBusy(false); };
-  const next = async () => {
-    if (step === 0 && !pickupId) {
-      setBusy(true); setError('');
-      const { data, error: addressError } = await supabase.from('addresses').insert({
-        user_id: user.id,
-        label: 'Recolha',
-        address_line: newPickup.address_line.trim(),
-        locality: newPickup.locality.trim(),
-        city: newPickup.city.trim() || null,
-        contact_name: newPickup.contact_name.trim(),
-        contact_phone: newPickup.contact_phone.trim(),
-        instructions: newPickup.instructions.trim() || null,
-      }).select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').single();
-      setBusy(false);
-      if (addressError || !data) { setError(addressError?.message || 'Não foi possível guardar o local de recolha.'); return; }
-      setAddresses((current) => [data as Address, ...current]);
-      setPickupId(data.id);
-    }
-    if (step === 2) prepareQuote(); else if (step < 3) setStep((value) => value + 1); else confirm();
+  const [step, setStep] = useState(0);
+  const [pickupId, setPickupId] = useState(addresses[0]?.id || '');
+  const [customPickup, setCustomPickup] = useState<StopInput>({ address_line:'', locality:'', city:'Luanda', contact_name:'', contact_phone:'', alternative_contact_phone:'', instructions:'' });
+  const [destination, setDestination] = useState<StopInput>({ address_line:'', locality:'', city:'', contact_name:'', contact_phone:'', alternative_contact_phone:'', instructions:'' });
+  const [stops, setStops] = useState<StopInput[]>([]);
+  const [pkg, setPkg] = useState({ package_type:'', package_size:'', description:'', declared_value:'', fragile:false, legalConsent:false });
+  const [file, setFile] = useState<File|null>(null);
+  const [preview, setPreview] = useState('');
+  const [levelId, setLevelId] = useState(levels[0]?.id || '');
+  const [deliveryMode, setDeliveryMode] = useState<'now'|'scheduled'>('now');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('09:00');
+  const [quote, setQuote] = useState<Quote|null>(null);
+  const [draft, setDraft] = useState<Draft|null>(null);
+  const [payment, setPayment] = useState<(typeof paymentOptions)[number]['value']>('cash');
+  const [gratuity, setGratuity] = useState('0');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const cameraRef = useRef<HTMLInputElement>(null);
+
+  const selectedLevel = levels.find((item) => item.id === levelId);
+  const pickup = addresses.find((address) => address.id === pickupId);
+  const scheduledFor = deliveryMode === 'scheduled' && scheduledDate ? new Date(`${scheduledDate}T${scheduledTime}`).toISOString() : null;
+  const packageChoices = [
+    { value:'Envelope', icon:'📄', description:'Documentos, chaves, papéis, carregadores e semelhantes.' },
+    { value:'Pequeno', icon:'📦', description:'Tamanho de uma caixa de sapatos, saco de compras ou saco de arroz.' },
+    { value:'Médio', icon:'🎒', description:'Tamanho de uma mochila ou mala.' },
+    { value:'Grande', icon:'🚚', description:'Requer carrinha.' },
+  ];
+  const scheduleLevels = levels.filter((item) => item.scheduling_supported);
+  const availableLevels = deliveryMode === 'scheduled' ? scheduleLevels : levels;
+  const canContinue =
+    step === 0 ? Boolean((pickupId || (customPickup.address_line.trim() && customPickup.locality.trim())) && destination.address_line.trim() && destination.locality.trim() && destination.contact_name.trim() && destination.contact_phone.trim()) :
+    step === 1 ? Boolean(pkg.package_type && pkg.description.trim() && pkg.legalConsent && file) :
+    step === 2 ? Boolean(levelId && (deliveryMode === 'now' || (scheduledDate && scheduledTime && selectedLevel?.scheduling_supported))) :
+    step === 3 ? Boolean(quote && payment) : Boolean(quote && payment && draft);
+
+  const updateDestination = (field: keyof StopInput, value: string) => setDestination((current) => ({ ...current, [field]: value }));
+  const handleFile = (next: File|null) => {
+    if (!next) return;
+    if (!['image/jpeg','image/webp'].includes(next.type)) { setError('A fotografia deve ser JPEG ou WebP.'); return; }
+    if (next.size > 10 * 1024 * 1024) { setError('A fotografia deve ter no máximo 10 MB.'); return; }
+    setFile(next); setPreview(URL.createObjectURL(next)); setError('');
   };
-  return <section className="stack page-section"><div className="flow-heading"><button className="text-button" onClick={onCancel}><X size={18} /> Cancelar</button><span>Passo {step + 1} de 4</span></div><div className="progress"><span style={{ width: `${((step + 1) / 4) * 100}%` }} /></div>{step === 0 && <><div><p className="eyebrow">Novo envio</p><h1>Recolha e destino</h1><p className="muted">Indica onde vamos recolher e para onde vamos levar o pacote.</p></div><label>Onde recolher<select value={pickupId} onChange={(e) => setPickupId(e.target.value)}><option value="">Escolhe um endereço guardado</option>{addresses.map((address) => <option key={address.id} value={address.id}>{address.label || address.address_line}</option>)}</select></label>{pickup ? <div className="selected-address"><MapPin size={18} /><span>{pickup.address_line}{pickup.city ? `, ${pickup.city}` : ''}</span></div> : <div className="stack visitor-pickup"><div className="notice">Ainda não tens um endereço guardado. Define o local de recolha para continuar.</div><AddressFields value={newPickup} onChange={(field, value) => setNewPickup((current) => ({ ...current, [field]: value }))} /></div>}<div className="section-heading"><h2>Destino final</h2><span>obrigatório</span></div><AddressFields value={destination} onChange={(field, value) => setDestination((current) => ({ ...current, [field]: value }))} /><div className="section-heading"><h2>Paragens intermédias</h2><button className="text-button" onClick={addStop}><Plus size={16} /> Adicionar</button></div>{stops.map((stop, index) => <div className="stop-card" key={index}><div className="stop-title"><strong>Paragem {index + 1}</strong><button className="icon-button small" onClick={() => setStops((current) => current.filter((_, i) => i !== index))}><X size={15} /></button></div><AddressFields value={stop} onChange={(field, value) => updateStop(index, field, value)} compact /></div>)}</>}{step === 1 && <><div><p className="eyebrow">O pacote</p><h1>O que vais enviar?</h1><p className="muted">A fotografia é evidência do pacote, não é prova de entrega.</p></div><div className="choice-grid">{['Documento', 'Pequeno pacote', 'Caixa', 'Encomenda', 'Outro'].map((type) => <button key={type} className={pkg.package_type === type ? 'choice selected' : 'choice'} onClick={() => setPkg({ ...pkg, package_type: type })}><Package size={19} />{type}</button>)}<div className="section-heading"><h2>Tamanho</h2></div>{['Pequeno', 'Médio', 'Grande'].map((size) => <button key={size} className={pkg.package_size === size ? 'choice selected' : 'choice'} onClick={() => setPkg({ ...pkg, package_size: size })}><Package size={19} />{size}</button>)}</div><label>Descrição<input value={pkg.description} onChange={(e) => setPkg({ ...pkg, description: e.target.value })} placeholder="Ex.: documentos numa pasta azul" /></label><div className="two-col"><label>Peso (kg)<input type="number" min="0" step="0.1" value={pkg.weight_kg} onChange={(e) => setPkg({ ...pkg, weight_kg: e.target.value })} /></label><label>Valor declarado<input type="number" min="0" step="1" value={pkg.declared_value} onChange={(e) => setPkg({ ...pkg, declared_value: e.target.value })} /></label></div><label className="check-row"><input type="checkbox" checked={pkg.fragile} onChange={(e) => setPkg({ ...pkg, fragile: e.target.checked })} /> É frágil</label><div className="evidence-box">{preview ? <img src={preview} alt="Pré-visualização da evidência do pacote" /> : <><Camera size={30} /><strong>Fotografia do pacote</strong><small>JPEG ou WebP · até 10 MB</small></>}<input ref={cameraRef} type="file" accept="image/jpeg,image/webp" capture="environment" onChange={(e) => handleFile(e.target.files?.[0] || null)} /><button className="secondary" onClick={() => cameraRef.current?.click()}>{preview ? 'Repetir fotografia' : 'Abrir câmara'}</button></div></>}{step === 2 && <><div><p className="eyebrow">Opção de entrega</p><h1>Escolhe o ritmo</h1><p className="muted">Escolhe a opção que combina melhor com o que precisas.</p></div><div className="stack">{levels.map((level) => <button key={level.id} className={level.id === levelId ? 'service-card selected' : 'service-card'} onClick={() => setLevelId(level.id)}><span><strong>{level.name}</strong><small>{level.description || 'Serviço de entrega PegaJá'}{level.promised_minutes ? ` · até ${level.promised_minutes} min` : ''}</small></span><ChevronRight size={18} /></button>)}</div>{selectedLevel?.scheduling_supported && <label>Agendar recolha<input type="datetime-local" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} /></label>}<div className="notice"><Clock3 size={18} /> Mostramos o valor depois de confirmares a rota e a opção de entrega.</div></>}{step === 3 && <><div><p className="eyebrow">Rever e confirmar</p><h1>Está tudo certo?</h1><p className="muted">Revê os detalhes antes de confirmar o teu envio.</p></div><div className="summary-card"><SummaryRow label="Rota" value={`${pickup?.address_line || 'Recolha'} → ${destination.address_line}`} /><SummaryRow label="Pacote" value={`${pkg.package_type} · ${pkg.package_size}: ${pkg.description}`} /><SummaryRow label="Serviço" value={selectedLevel?.name || '—'} /><SummaryRow label="Valor" value={money(quote?.total_amount, quote?.currency)} strong /></div><label>Pagamento<select value={payment} onChange={(e) => setPayment(e.target.value as typeof payment)}>{paymentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Gratificação do estafeta<select value={gratuity} onChange={(e) => setGratuity(e.target.value)}>{gratuityOptions.filter((option) => option.value !== 'custom').map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><div className="notice"><Check size={18} /> Vamos confirmar os detalhes e o pagamento antes de concluir o envio.</div></>}{error && <div className="error">{error}</div>}<div className="flow-actions">{step > 0 && <button className="secondary" onClick={() => setStep((value) => value - 1)} disabled={busy}>Voltar</button>}<button className="primary" onClick={next} disabled={busy || !canContinue}>{busy ? 'A validar…' : step === 3 ? 'Confirmar envio' : step === 2 ? 'Calcular cotação' : 'Continuar'} <ChevronRight size={18} /></button></div></section>;
+  const addStop = () => setStops((current) => [...current, { address_line:'', locality:'', city:'', contact_name:'', contact_phone:'', alternative_contact_phone:'', instructions:'' }]);
+  const updateStop = (index:number, field:keyof StopInput, value:string) => setStops((current) => current.map((stop,i) => i===index ? { ...stop, [field]:value } : stop));
+
+  const prepareQuote = async () => {
+    setBusy(true); setError('');
+    try {
+      const serviceLevelId = levelId || availableLevels[0]?.id;
+      if (!serviceLevelId) throw new Error('Nenhum serviço de entrega está disponível neste momento.');
+      const { data: draftData, error: draftError } = await supabase.rpc('create_delivery_draft', {
+        p_idempotency_key:idempotency(),
+        p_service_level_id:serviceLevelId,
+        p_scheduled_for:scheduledFor,
+        p_notes:destination.instructions.trim() || null
+      });
+      if (draftError) throw draftError;
+      const created = unwrap<Draft>(draftData);
+      if (!created) throw new Error('Não conseguimos preparar o teu envio. Tenta novamente.');
+
+      const pickupRow = pickup ? {
+        delivery_id:created.id, sequence_no:1, stop_type:'pickup', address_id:pickup.id,
+        address_line:pickup.address_line, locality:pickup.locality, city:pickup.city,
+        contact_name:pickup.contact_name, contact_phone:pickup.contact_phone,
+        alternative_contact_phone:null, instructions:pickup.instructions
+      } : {
+        delivery_id:created.id, sequence_no:1, stop_type:'pickup', address_id:null,
+        address_line:customPickup.address_line.trim(), locality:customPickup.locality.trim() || null,
+        city:customPickup.city.trim() || null, contact_name:null, contact_phone:null,
+        alternative_contact_phone:null, instructions:customPickup.instructions.trim() || null
+      };
+
+      const stopRows = [
+        pickupRow,
+        ...stops.map((stop,index) => ({
+          delivery_id:created.id, sequence_no:index+2, stop_type:'waypoint', address_id:null,
+          address_line:stop.address_line.trim(), locality:stop.locality.trim() || null, city:stop.city.trim() || null,
+          contact_name:stop.contact_name.trim() || null, contact_phone:stop.contact_phone.trim() || null,
+          alternative_contact_phone:stop.alternative_contact_phone.trim() || null, instructions:stop.instructions.trim() || null
+        })),
+        {
+          delivery_id:created.id, sequence_no:stops.length+2, stop_type:'dropoff', address_id:null,
+          address_line:destination.address_line.trim(), locality:destination.locality.trim() || null, city:destination.city.trim() || null,
+          contact_name:destination.contact_name.trim(), contact_phone:destination.contact_phone.trim(),
+          alternative_contact_phone:destination.alternative_contact_phone.trim() || null, instructions:destination.instructions.trim() || null
+        }
+      ];
+
+      if (stops.length > 0 && stopRows.length < 3) throw new Error('Uma rota com paragem intermédia precisa de pelo menos 3 locais.');
+      const { data:stopData,error:stopError } = await supabase.from('delivery_stops').insert(stopRows).select('id,sequence_no,stop_type').order('sequence_no');
+      if (stopError) throw stopError;
+
+      const { data:packageData,error:packageError } = await supabase.from('delivery_packages').insert({
+        delivery_id:created.id, package_type:pkg.package_type, metadata:{ package_size:pkg.package_size || pkg.package_type },
+        description:pkg.description.trim(), declared_value:pkg.declared_value ? Number(pkg.declared_value) : null, fragile:pkg.fragile
+      }).select('id').single();
+      if (packageError) throw packageError;
+
+      const extension=file!.type==='image/webp'?'webp':'jpg';
+      const objectPath=`${created.id}/${packageData.id}/${crypto.randomUUID()}.${extension}`;
+      const { error:uploadError } = await supabase.storage.from('delivery-evidence').upload(objectPath,file!,{contentType:file!.type,upsert:false});
+      if (uploadError) throw uploadError;
+      const { error:evidenceError } = await supabase.from('delivery_evidence').insert({
+        delivery_id:created.id, package_id:packageData.id, stop_id:stopData?.[0]?.id || null,
+        bucket_id:'delivery-evidence', object_path:objectPath, evidence_type:'customer_package_photo',
+        captured_by:user.id, metadata:{source:'camera_capture_required',content_type:file!.type}
+      });
+      if (evidenceError) throw evidenceError;
+
+      const { error:consentError } = await supabase.from('delivery_policy_acceptances').insert({
+        delivery_id:created.id, user_id:user.id, policy_code:'customer_delivery_terms',
+        policy_version:'v1'
+      });
+      if (consentError) throw consentError;
+
+      const { data:quoteData,error:quoteError } = await supabase.rpc('calculate_delivery_quote',{p_delivery_id:created.id,p_service_level_id:serviceLevelId});
+      if (quoteError) throw quoteError;
+      const nextQuote=unwrap<Quote>(quoteData);
+      if (!nextQuote) throw new Error('Não conseguimos calcular o valor da entrega agora. Tenta novamente.');
+      setDraft(created); setQuote(nextQuote); setStep(4);
+    } catch (cause) {
+      const raw=cause instanceof Error ? cause.message : '';
+      const friendly = raw.includes('service level unavailable') ? 'Este serviço de entrega já não está disponível.' :
+        raw.includes('scheduled time cannot be in the past') ? 'Escolhe uma data e hora futuras.' :
+        raw.includes('permission denied') ? 'Não foi possível guardar este envio. Tenta novamente.' :
+        raw || 'Não foi possível preparar o envio. Tenta novamente.';
+      setError(friendly);
+    } finally { setBusy(false); }
+  };
+
+  const confirm = async () => {
+    if (!draft || !quote) return;
+    setBusy(true); setError('');
+    const gratuityAmount = gratuity === '0' ? 0 : quote.total_amount * (Number(gratuity) / 100);
+    const { error:confirmError } = await supabase.rpc('confirm_delivery',{
+      p_delivery_id:draft.id, p_payment_method:payment, p_gratuity_amount:gratuityAmount
+    });
+    if (confirmError) {
+      const raw=confirmError.message || '';
+      setError(raw.includes('payment method is not currently available') ? 'Esta forma de pagamento não está disponível neste momento.' :
+        raw.includes('delivery terms must be accepted') ? 'Aceita os termos do envio para continuar.' :
+        raw.includes('quote expired') ? 'A cotação expirou. Volta atrás e calcula novamente.' :
+        raw || 'Não foi possível confirmar o envio. Tenta novamente.');
+    } else onCreated();
+    setBusy(false);
+  };
+
+  const next = () => {
+    if (!canContinue) return;
+    if (step === 2) { void prepareQuote(); return; }
+    if (step === 4) { void confirm(); return; }
+    setStep((value) => Math.min(4,value+1));
+  };
+
+  const renderCalendar = () => {
+    const days = Array.from({length:14},(_,i) => {
+      const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+i); return d;
+    });
+    return <div className="shipment-calendar">
+      {days.map((day) => {
+        const key=day.toISOString().slice(0,10);
+        const selected=scheduledDate===key;
+        return <button type="button" key={key} className={selected?'calendar-day selected':'calendar-day'} onClick={() => setScheduledDate(key)}>
+          <small>{day.toLocaleDateString('pt-AO',{weekday:'short'}).replace('.','')}</small><strong>{day.getDate()}</strong><span>{day.toLocaleDateString('pt-AO',{month:'short'}).replace('.','')}</span>
+        </button>;
+      })}
+    </div>;
+  };
+
+  const renderTimeWheel = () => {
+    const times=Array.from({length:29},(_,i) => {
+      const minutes=8*60+i*30; return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+    });
+    return <div className="time-wheel"><div className="time-wheel-track">{times.map((time) => <button type="button" key={time} className={scheduledTime===time?'time-option selected':'time-option'} onClick={() => setScheduledTime(time)}>{time}</button>)}</div></div>;
+  };
+
+  return <section className="stack page-section shipment-flow">
+    <div className="flow-heading"><button className="text-button" onClick={onCancel}><X size={18}/> Cancelar</button><span>Passo {step+1} de 5</span></div>
+    <div className="progress"><span style={{width:`${((step+1)/5)*100}%`}} /></div>
+
+    {step===0 && <>
+      <div className="shipment-step-intro"><span className="shipment-step-number">1</span><div><p className="eyebrow">Da onde?</p><h1>Da onde?</h1></div></div>
+      <div className="shipment-safety-note"><ShieldCheck size={19}/><strong>O pacote está bem embalado e seguro!</strong></div>
+      <div className="shipment-address-choices">
+        {addresses.map((address) => <button type="button" key={address.id} className={pickupId===address.id?'shipment-address-card selected':'shipment-address-card'} onClick={() => setPickupId(address.id)}><MapPin size={18}/><span><strong>{address.label || 'Endereço'}</strong><small>{address.address_line}{address.locality ? `, ${address.locality}` : ''}</small></span><ChevronRight size={17}/></button>)}
+        <button type="button" className={!pickupId?'shipment-address-card selected':'shipment-address-card'} onClick={() => setPickupId('')}><Plus size={18}/><span><strong>Outro endereço</strong><small>Usar apenas neste envio</small></span><ChevronRight size={17}/></button>
+      </div>
+      {!pickupId && <AddressFields value={customPickup} onChange={(field,value) => setCustomPickup((current) => ({...current,[field]:value}))}/>}
+    </>}
+
+    {step===1 && <>
+      <div className="shipment-step-intro"><span className="shipment-step-number">2</span><div><p className="eyebrow">Para onde?</p><h1>Para onde?</h1></div></div>
+      <AddressFields value={destination} onChange={updateDestination}/>
+    </>}
+
+    {step===2 && <>
+      <div className="shipment-step-intro"><span className="shipment-step-number">3</span><div><p className="eyebrow">Sobre o pacote</p><h1>Estás a enviar:</h1></div></div>
+      <div className="shipment-package-grid">
+        {packageChoices.map((choice) => <button type="button" key={choice.value} className={pkg.package_type===choice.value?'shipment-package-card selected':'shipment-package-card'} onClick={() => setPkg({...pkg,package_type:choice.value,package_size:choice.value})}><span className="shipment-package-icon">{choice.icon}</span><strong>{choice.value}</strong><small>{choice.description}</small></button>)}
+      </div>
+      <label>O que contém?<input value={pkg.description} onChange={(e) => setPkg({...pkg,description:e.target.value})} placeholder="ex.: livro, roupa, electrónica..." /></label>
+      <label>Valor declarado (Kz)<small className="field-hint">Valor aproximado do que estás a enviar.</small><input type="number" min="0" step="1" value={pkg.declared_value} onChange={(e) => setPkg({...pkg,declared_value:e.target.value})} placeholder="0" /></label>
+      <label className="check-row"><input type="checkbox" checked={pkg.legalConsent} onChange={(e) => setPkg({...pkg,legalConsent:e.target.checked})}/> Aceito os termos do envio</label>
+      <label className="check-row"><input type="checkbox" checked={pkg.fragile} onChange={(e) => setPkg({...pkg,fragile:e.target.checked})}/> É frágil?</label>
+      <div className="evidence-box shipment-camera-box">{preview?<img src={preview} alt="Fotografia do pacote"/>:<><Camera size={30}/><strong>Fotografa o pacote</strong><small>Precisamos de uma fotografia do pacote antes da recolha.</small></>}<input ref={cameraRef} type="file" accept="image/jpeg,image/webp" capture="environment" onChange={(e)=>handleFile(e.target.files?.[0]||null)}/><button type="button" className="secondary" onClick={()=>cameraRef.current?.click()}>{preview?'Repetir fotografia':'Abrir câmara'}</button></div>
+    </>}
+
+    {step===3 && <>
+      <div className="shipment-step-intro"><span className="shipment-step-number">4</span><div><p className="eyebrow">Entrega</p><h1>Como queres receber o serviço?</h1></div></div>
+      <div className="shipment-delivery-mode-grid">
+        <button type="button" className={deliveryMode==='now'?'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('now')}><strong>🚀 Express</strong><small>Prioridade! mais rápida</small></button>
+        <button type="button" className={deliveryMode==='now' && !selectedLevel?.scheduling_supported ? 'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('now')}><strong>⚖️ Standard</strong><small>Opção normal</small></button>
+        <button type="button" className={deliveryMode==='scheduled'?'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('scheduled')}><strong>📅 Agendar</strong><small>Escolhe o dia e a hora da recolha</small></button>
+      </div>
+      {deliveryMode!=='scheduled' && <div className="stack shipment-service-list">{levels.map((level)=><button type="button" key={level.id} className={level.id===levelId?'service-card selected':'service-card'} onClick={()=>setLevelId(level.id)}><span><strong>{level.name}</strong><small>{level.description || 'Serviço de entrega PegaJá'}</small></span><ChevronRight size={18}/></button>)}</div>}
+      {deliveryMode==='scheduled' && <>
+        <div className="stack shipment-service-list">{scheduleLevels.map((level)=><button type="button" key={level.id} className={level.id===levelId?'service-card selected':'service-card'} onClick={()=>setLevelId(level.id)}><span><strong>{level.name}</strong><small>{level.description || 'Serviço de entrega PegaJá'}</small></span><ChevronRight size={18}/></button>)}</div>
+        {scheduleLevels.length===0 ? <div className="notice">Nenhum serviço disponível para agendamento neste momento.</div> : <><div><p className="section-label">Escolhe o dia</p>{renderCalendar()}</div><div><p className="section-label">Escolhe a hora</p>{renderTimeWheel()}</div></>}
+      </>}
+      <div className="notice"><Clock3 size={18}/> O valor da entrega é calculado com base na rota e no serviço disponível.</div>
+    </>}
+
+    {step===4 && <>
+      <div className="shipment-step-intro"><span className="shipment-step-number">5</span><div><p className="eyebrow">Confirmar</p><h1>Confirmar o teu envio</h1></div></div>
+      <div className="summary-card">
+        <SummaryRow label="Rota" value={`${pickup?.address_line || customPickup.address_line || 'Recolha'} → ${destination.address_line}`}/>
+        <SummaryRow label="Destinatário" value={`${destination.contact_name} · ${destination.contact_phone}`}/>
+        <SummaryRow label="Pacote" value={`${pkg.package_type} · ${pkg.description}`}/>
+        <SummaryRow label="Serviço" value={selectedLevel?.name || '—'}/>
+        {scheduledFor && <SummaryRow label="Agendado" value={new Date(scheduledFor).toLocaleString('pt-AO',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}/>}
+        <SummaryRow label="Valor da entrega" value={money(quote?.total_amount,quote?.currency)} strong/>
+      </div>
+      <label>Pagamento<select value={payment} onChange={(e)=>setPayment(e.target.value as typeof payment)}>{paymentOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label>Gorjeta<select value={gratuity} onChange={(e)=>setGratuity(e.target.value)}>{gratuityOptions.filter((option)=>option.value!=='custom').map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      {gratuity!=='0' && quote && <div className="tip-preview">Gorjeta: {money(quote.total_amount*(Number(gratuity)/100),quote.currency)}</div>}
+      <div className="notice"><Check size={18}/> Tudo pronto. O envio só será criado depois de confirmares.</div>
+    </>}
+
+    {error && <div className="error">{error}</div>}
+    <div className="flow-actions">
+      {step>0 && <button className="secondary" type="button" onClick={()=>setStep((value)=>value-1)} disabled={busy}>Voltar</button>}
+      <button className="primary" type="button" onClick={next} disabled={busy || !canContinue}>{busy?'A preparar…':step===4?'Confirmar envio':step===2?'Continuar':'Continuar'} <ChevronRight size={18}/></button>
+    </div>
+  </section>;
 }
-function AddressFields({ value, onChange, compact = false }: { value: StopInput; onChange: (field: keyof StopInput, value: string) => void; compact?: boolean }) { return <div className="stack"><label>Morada<input required value={value.address_line} onChange={(e) => onChange('address_line', e.target.value)} placeholder="Rua, número e referência" /></label><div className="two-col"><label>Localidade<input value={value.locality} onChange={(e) => onChange('locality', e.target.value)} /></label><label>Cidade<input value={value.city} onChange={(e) => onChange('city', e.target.value)} /></label></div><div className="two-col"><label>Nome do destinatário<input required value={value.contact_name} onChange={(e) => onChange('contact_name', e.target.value)} /></label><label>Telefone<input required value={value.contact_phone} onChange={(e) => onChange('contact_phone', e.target.value)} /></label></div>{!compact && <label>Instruções<input value={value.instructions} onChange={(e) => onChange('instructions', e.target.value)} placeholder="Portaria, andar, referência…" /></label>}</div>; }
+function AddressFields({ value, onChange, compact = false }: { value: StopInput; onChange: (field: keyof StopInput, value: string) => void; compact?: boolean }) {
+  return <div className="stack">
+    <label>Morada<input required value={value.address_line} onChange={(e)=>onChange('address_line',e.target.value)} placeholder="Rua, número, referência"/></label>
+    <label>Localidade<input required value={value.locality} onChange={(e)=>onChange('locality',e.target.value)} placeholder="Bairro e Município"/></label>
+    {!compact && <>
+      <div className="two-col">
+        <label>Quem recebe? Nome<input required value={value.contact_name} onChange={(e)=>onChange('contact_name',e.target.value)} placeholder="Nome do destinatário"/></label>
+        <label>Telefone<input required value={value.contact_phone} onChange={(e)=>onChange('contact_phone',e.target.value)} placeholder="9XX XXX XXX"/></label>
+      </div>
+      <label>Telefone alternativo <span className="optional-label">(opcional)</span><input value={value.alternative_contact_phone} onChange={(e)=>onChange('alternative_contact_phone',e.target.value)} placeholder="9XX XXX XXX"/></label>
+      <label>+ Adicionar instruções<input value={value.instructions} onChange={(e)=>onChange('instructions',e.target.value)} placeholder="Portão azul, 2.º andar, ligar ao chegar."/></label>
+    </>}
+  </div>;
+}
 function SummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className="summary-row"><span>{label}</span><strong className={strong ? 'amount' : ''}>{value}</strong></div>; }
 
 function ShipmentsTab({ refreshToken }: { refreshToken: number }) {
