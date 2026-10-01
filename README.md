@@ -1,12 +1,12 @@
-# TrazJá
+# PegaJá
 
-**Tudo que precisa ir, chega!**
+**Tudo que precisa ir, Chega!**
 
-TrazJá is a logistics network for moving packages, documents and other items between people and businesses.
+PegaJá is an Angola-first logistics network for moving packages, documents and other items between people and businesses.
 
 ## Repository structure
 
-- `apps/customer` — customer PWA
+- `apps/customer` — PegaJá customer PWA
 - `apps/courier` — courier PWA
 - `apps/operations` — operations web dashboard
 - `packages/supabase` — shared Supabase client and generated database types
@@ -16,7 +16,7 @@ TrazJá is a logistics network for moving packages, documents and other items be
 
 Supabase project: `cswyxgawqqexytgcnjib` (eu-west-1).
 
-The database already contains the first TrazJá domain model. This repository starts by making the database state reproducible and hardening its authorization boundaries.
+The existing backend and logistics domain remain the source of truth. This rebrand changes the customer-facing product identity from TrazJá to PegaJá; it does not rewrite the delivery, dispatch, payment, evidence, or authorization model.
 
 No service-role or secret key belongs in frontend environment variables.
 
@@ -43,7 +43,7 @@ Multi-stop delivery is first-class:
 
 The initial Supabase project was inspected before application scaffolding. Existing policies contained several object-level authorization defects; those were corrected before frontend work began.
 
-The customer PWA is now scaffolded in `apps/customer` on the `feature/trazja-customer-experience` branch. Run it with `pnpm --filter @trazja/customer dev` and provide the publishable Supabase key from `.env.example`.
+The PegaJá customer PWA is scaffolded in `apps/customer` on the customer-experience branch. Run it with `pnpm --filter @pegaja/customer dev` and provide the publishable Supabase key from `.env.example`.
 
 The customer workflow uses only verified live contracts: `create_delivery_draft`, draft-scoped inserts into `delivery_stops`, `delivery_packages`, and `delivery_evidence`, private `delivery-evidence` Storage uploads, `calculate_delivery_quote`, and `confirm_delivery`. Prices, totals, service levels, availability, delivery state, and authorization remain backend-owned. Realtime delivery events refresh shipment tracking; no client-calculated shipment state is persisted.
 
