@@ -114,3 +114,25 @@
 .action-icon{width:35px;height:35px;flex:0 0 35px;border-radius:11px;background:#FFF0E7;color:var(--orange);display:flex;align-items:center;justify-content:center}
 @media(max-width:390px){.home-dashboard{padding-left:16px;padding-right:16px}.home-map-card{height:210px}.home-actions{grid-template-columns:1fr}.home-header h1{font-size:25px}}
 @media(min-width:640px){.home-dashboard{padding-left:32px;padding-right:32px}.home-map-card{height:280px}}
+
+/* PegaJá customer home — intentionally quiet and human */
+.home-dashboard{padding:18px 20px 30px}
+.home-header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+.paula-stack{background:transparent;padding:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;color:var(--coal);font-weight:700}
+.paula-person{font-size:30px;line-height:1}
+.home-location{flex:0 1 58%;min-width:0}
+.home-prompt{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.03em;margin:22px 0 12px}
+.home-new-shipment{width:100%;display:flex;align-items:center;gap:12px;background:var(--orange);color:#fff;border-radius:18px;padding:15px 16px;text-align:left;box-shadow:0 10px 24px rgba(242,140,40,.18)}
+.home-new-shipment>span:nth-child(2){display:flex;flex-direction:column;gap:2px;flex:1}
+.home-new-shipment small{opacity:.86}
+.home-active{margin-top:28px}
+.home-movement-empty{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:24px 18px}
+.home-movement-empty strong{color:var(--coal)}
+.home-movement-empty p{margin:3px 0 0}
+.paula-chat{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.paula-message,.customer-message{max-width:88%;padding:11px 13px;border-radius:15px;line-height:1.45;font-size:14px}
+.paula-message{align-self:flex-start;background:#fff;border:1px solid var(--border)}
+.customer-message{align-self:flex-end;background:var(--orange);color:#fff}
+.paula-input{display:flex;gap:8px}
+.paula-input input{flex:1}
+.paula-input .primary{min-width:84px}
