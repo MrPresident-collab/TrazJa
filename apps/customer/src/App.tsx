@@ -712,10 +712,85 @@ function CustomerShell({ user }: { user: AuthUser }) {
 function NavButton({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) { return <button className={active ? 'nav-button active' : 'nav-button'} onClick={onClick}>{icon}<span>{label}</span></button>; }
 
 function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: () => void; onOpenPaula: () => void }) {
-  const [addresses, setAddresses] = useState<Address[]>([]); const [levels, setLevels] = useState<ServiceLevel[]>([]); const [error, setError] = useState(''); const [showNew, setShowNew] = useState(false); const [loading, setLoading] = useState(true);
-  useEffect(() => { Promise.all([supabase.from('addresses').select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50), supabase.from('service_levels').select('id,code,name,description,promised_minutes,same_day,scheduling_supported').eq('active', true).order('sort_order').limit(30)]).then(([a, s]) => { if (a.error || s.error) setError(a.error?.message || s.error?.message || 'Não foi possível carregar os dados.'); setAddresses(a.data || []); setLevels(s.data || []); setLoading(false); }); }, [user.id]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [levels, setLevels] = useState<ServiceLevel[]>([]);
+  const [activeDeliveries, setActiveDeliveries] = useState<Delivery[]>([]);
+  const [error, setError] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('addresses').select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('service_levels').select('id,code,name,description,promised_minutes,same_day,scheduling_supported').eq('active', true).order('sort_order').limit(30),
+      supabase.from('deliveries').select('id,reference,status,quoted_amount,total_amount,currency,created_at,scheduled_for,service_level_id,delivery_stops(id,sequence_no,stop_type,address_line,locality,city,contact_name,completed_at),delivery_packages(id,description,package_type,fragile)').in('status', ['dispatching','assigned','en_route_to_pickup','at_pickup','picked_up','in_transit','at_stop']).order('created_at', { ascending: false }).limit(3)
+    ]).then(([a, s, d]) => {
+      if (a.error || s.error || d.error) setError(a.error?.message || s.error?.message || d.error?.message || 'Não foi possível carregar os dados.');
+      setAddresses(a.data || []);
+      setLevels(s.data || []);
+      setActiveDeliveries((d.data as Delivery[]) || []);
+      setLoading(false);
+    });
+  }, [user.id]);
+
   if (showNew) return <NewShipment user={user} addresses={addresses} levels={levels} onCancel={() => setShowNew(false)} onCreated={onCreated} />;
-  return <section className="stack page-section"><div className="hero"><div><p className="eyebrow light">A tua logística, no teu ritmo</p><h1>O que precisas de enviar?</h1><p>Cria um envio com recolha, destino e acompanhamento do início ao fim.</p></div><Package size={42} strokeWidth={1.4} /></div><button className="primary big" onClick={() => setShowNew(true)} disabled={loading || levels.length === 0}><Plus size={20} /> Novo envio</button>{levels.length === 0 && !loading && <div className="notice">Ainda não existem serviços ativos configurados pela operação.</div>}{error && <div className="error">{error}</div>}<div className="quick-grid"><button className="surface-card" onClick={onOpenPaula}><span className="round-icon terracotta"><CircleHelp size={20} /></span><strong>Falar com a Paula</strong><small>Ajuda 24/7, com contexto autorizado.</small></button><div className="surface-card"><span className="round-icon navy"><MapPin size={20} /></span><strong>{addresses.length} destinos guardados</strong><small>Escolhe um endereço na criação do envio.</small></div></div><div className="section-heading"><div><p className="eyebrow">Como funciona</p><h2>Do pedido à entrega</h2></div></div><div className="steps"><Step number="1" title="Cria o envio" body="Indica o pacote, as paragens e as pessoas." /><Step number="2" title="Recebe a cotação" body="O backend calcula a rota e o preço vigente." /><Step number="3" title="Acompanha" body="Vê os eventos e o estado do estafeta em tempo real." /></div></section>;
+
+  const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'cliente';
+  const active = activeDeliveries[0] || null;
+  const activeStop = active?.delivery_stops?.find((stop) => stop.stop_type === 'dropoff') || active?.delivery_stops?.at(-1);
+  const activeStatus = active ? (statuses[active.status] || active.status) : '';
+  const destination = activeStop?.locality || activeStop?.address_line || 'Destino';
+
+  return <section className="home-dashboard">
+    <div className="home-header">
+      <div>
+        <p className="eyebrow">PegaJá</p>
+        <h1>Olá, {firstName}.</h1>
+        <p>O que precisa ir hoje?</p>
+      </div>
+      <button className="paula-trigger" onClick={onOpenPaula} aria-label="Abrir Paula"><span>P</span><small>Paula</small></button>
+    </div>
+
+    <button className="home-location" type="button">
+      <span className="home-location-icon"><MapPin size={18} /></span>
+      <span><small>Local de recolha</small><strong>{addresses[0]?.label || addresses[0]?.locality || addresses[0]?.address_line || 'Adicionar endereço'}</strong></span>
+      <ChevronRight size={18} />
+    </button>
+
+    <div className="home-map-card" aria-label="Mapa da operação PegaJá">
+      <div className="map-grid" />
+      <div className="map-road map-road-a" />
+      <div className="map-road map-road-b" />
+      <div className="map-route"><span className="map-pin pickup"><MapPin size={15} /></span><span className="map-line" /><span className="map-pin destination"><Package size={15} /></span></div>
+      <div className="map-caption"><span><i className="status-dot" /> {active ? activeStatus : 'A tua zona'}</span>{active && <strong>{destination}</strong>}</div>
+    </div>
+
+    <button className="home-new-shipment" onClick={() => setShowNew(true)} disabled={loading || levels.length === 0}>
+      <span className="home-new-icon"><Plus size={25} /></span>
+      <span><strong>Novo envio</strong><small>Prepara uma entrega em poucos passos</small></span>
+      <ChevronRight size={20} />
+    </button>
+
+    {levels.length === 0 && !loading && <div className="notice">Ainda não existem serviços ativos configurados pela operação.</div>}
+    {error && <div className="error">{error}</div>}
+
+    {active && <section className="home-active">
+      <div className="home-section-heading"><div><p className="eyebrow">Em movimento</p><h2>{active.reference}</h2></div><span className="home-live"><i /> AO VIVO</span></div>
+      <div className="active-shipment-card">
+        <div className="active-route">
+          <div><span className="route-dot pickup-dot" /><div><small>Recolha</small><strong>{active.delivery_stops?.[0]?.locality || active.delivery_stops?.[0]?.address_line || 'Origem'}</strong></div></div>
+          <div className="route-connector" />
+          <div><span className="route-dot destination-dot" /><div><small>Destino</small><strong>{destination}</strong></div></div>
+        </div>
+        <div className="active-footer"><span>{activeStatus}</span><strong>{money(active.total_amount ?? active.quoted_amount, active.currency)}</strong></div>
+      </div>
+    </section>}
+
+    <section className="home-actions">
+      <button className="home-action" onClick={onOpenPaula}><span className="action-icon"><CircleHelp size={19} /></span><span><strong>Falar com a Paula</strong><small>Ajuda sobre os teus envios</small></span></button>
+      <button className="home-action" onClick={() => setShowNew(true)} disabled={loading || levels.length === 0}><span className="action-icon"><Send size={19} /></span><span><strong>Enviar novamente</strong><small>Começa com os teus endereços guardados</small></span></button>
+    </section>
+  </section>;
 }
 function Step({ number, title, body }: { number: string; title: string; body: string }) { return <div className="step"><span>{number}</span><div><strong>{title}</strong><p>{body}</p></div></div>; }
 
