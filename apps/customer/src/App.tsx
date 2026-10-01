@@ -396,6 +396,140 @@ function SignupCompletionScreen({ user, data, onComplete, onCancel }: { user: Au
   </main>;
 }
 
+function PhoneVerificationScreen({ phone, onBack, onChangeNumber }: { phone: string; onBack: () => void; onChangeNumber: () => void }) {
+  const [code, setCode] = useState('');
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [expirySeconds, setExpirySeconds] = useState(300);
+  const [busy, setBusy] = useState(true);
+  const [resending, setResending] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const sendCode = async () => {
+    setError('');
+    setResending(true);
+    const { error: otpError } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: false } });
+    if (otpError) {
+      setError('Não foi possível enviar o código. Tenta novamente.');
+    } else {
+      setSecondsLeft(60);
+      setExpirySeconds(300);
+    }
+    setResending(false);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const sendInitialCode = async () => {
+      setError('');
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone });
+      if (cancelled) return;
+      if (otpError) setError('Não foi possível enviar o código. Tenta novamente.');
+      setBusy(false);
+      inputRef.current?.focus();
+    };
+    void sendInitialCode();
+    return () => { cancelled = true; };
+  }, [phone]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const timer = window.setInterval(() => setSecondsLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [secondsLeft]);
+
+  useEffect(() => {
+    if (expirySeconds <= 0) return;
+    const timer = window.setInterval(() => setExpirySeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [expirySeconds]);
+
+  useEffect(() => {
+    if (code.length !== 6 || busy || resending) return;
+    let cancelled = false;
+    const verify = async () => {
+      setBusy(true);
+      setError('');
+      const { error: verifyError } = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
+      if (cancelled) return;
+      if (verifyError) {
+        setError('O código não é válido ou já expirou.');
+        setCode('');
+        setBusy(false);
+        inputRef.current?.focus();
+      }
+    };
+    void verify();
+    return () => { cancelled = true; };
+  }, [code, phone, busy, resending]);
+
+  const handleCodeChange = (value: string) => {
+    setError('');
+    setCode(value.replace(/\D/g, '').slice(0, 6));
+  };
+
+  return <main className="phone-verify-screen">
+    <div className="phone-verify-top">
+      <button className="text-button phone-verify-back" onClick={onBack} aria-label="Voltar">←</button>
+    </div>
+    <section className="phone-verify-content">
+      <h1>Verificar número</h1>
+      <p className="phone-verify-copy">Enviámos um código de 6 dígitos<br />para</p>
+      <strong className="phone-verify-number">{formatAngolaPhone(phone)}</strong>
+      <label className="sr-only" htmlFor="phone-otp">Código de verificação</label>
+      <div className="otp-slots" aria-hidden="true">
+        {Array.from({ length: 6 }, (_, index) => <span key={index} className={code[index] ? 'filled' : ''}>{code[index] || '_'}</span>)}
+      </div>
+      <input
+        ref={inputRef}
+        id="phone-otp"
+        className="otp-input"
+        type="tel"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        value={code}
+        onChange={(event) => handleCodeChange(event.target.value)}
+        disabled={busy || resending}
+        aria-label="Código de 6 dígitos"
+      />
+      <p className="otp-expiry">O código expira em {Math.floor(expirySeconds / 60)}:{String(expirySeconds % 60).padStart(2, '0')}</p>
+      {error && <p className="error phone-verify-error">{error}</p>}
+      <div className="otp-resend">
+        <span>Não recebeste o código?</span>
+        <button className="text-button" onClick={sendCode} disabled={secondsLeft > 0 || resending}>{resending ? 'A reenviar…' : 'Reenviar código'}</button>
+      </div>
+      <button className="change-phone" onClick={onChangeNumber}>Alterar número</button>
+    </section>
+  </main>;
+}
+
+function AuthScreen({ onBack }: { onBack: () => void }) {
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setError('');
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) setError(result.error.message);
+    setBusy(false);
+  };
+  return <main className="auth-page">
+    <div className="auth-card">
+      <button className="text-button auth-back" onClick={onBack}>← Voltar</button>
+      <div className="brand-mark">P<span>J</span></div>
+      <p className="eyebrow">Entrar</p>
+      <h1>Bem-vindo de volta.</h1>
+      <p className="muted">Entra com o email e a palavra-passe da tua conta PegaJá.</p>
+      <form onSubmit={submit} className="stack">
+        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
+        <label>Password<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        {error && <p className="error">Não foi possível entrar: {error}</p>}
+        <button className="primary" disabled={busy}>{busy ? 'A entrar…' : 'Entrar'}</button>
+      </form>
+      <p className="microcopy">A autenticação é gerida pelo Supabase Auth.</p>
+    </div>
+  </main>;
+}
+
 function CustomerShell({ user }: { user: AuthUser }) {
   const [tab, setTab] = useState<'home' | 'shipments' | 'notifications' | 'profile'>('home'); const [refreshToken, setRefreshToken] = useState(0); const [paulaOpen, setPaulaOpen] = useState(false);
   return <div className="app-shell"><header className="topbar"><div><p className="eyebrow">PegaJá</p><strong>Olá, {user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'cliente'}</strong></div><button className="icon-button" onClick={() => setPaulaOpen(true)} aria-label="Abrir Paula"><CircleHelp size={22} /></button></header><main className="page-content">{tab === 'home' && <HomeTab user={user} onCreated={() => { setRefreshToken((n) => n + 1); setTab('shipments'); }} onOpenPaula={() => setPaulaOpen(true)} />}{tab === 'shipments' && <ShipmentsTab refreshToken={refreshToken} />}{tab === 'notifications' && <NotificationsTab />}{tab === 'profile' && <ProfileTab user={user} />}</main><nav className="bottom-nav" aria-label="Navegação principal"><NavButton active={tab === 'home'} icon={<Home size={20} />} label="Início" onClick={() => setTab('home')} /><NavButton active={tab === 'shipments'} icon={<Send size={20} />} label="Envios" onClick={() => setTab('shipments')} /><NavButton active={tab === 'notifications'} icon={<Bell size={20} />} label="Notificações" onClick={() => setTab('notifications')} /><NavButton active={tab === 'profile'} icon={<User size={20} />} label="Perfil" onClick={() => setTab('profile')} /></nav>{paulaOpen && <PaulaModal onClose={() => setPaulaOpen(false)} user={user} />}</div>;
