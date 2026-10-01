@@ -1,4 +1,4 @@
-# TrazJá Backend Audit — 2026-09-30
+# PegaJá Backend Audit — 2026-09-30
 
 ## Current backend state
 
@@ -37,9 +37,9 @@ The live database is the current runtime source of truth while the reproducible 
 
 ## Intentional architecture
 
-FleetPulse is being used as a backend/domain reference, not copied 1:1. The TrazJá model keeps the same important logistics primitives—delivery lifecycle, ordered stops, assignment/dispatch, courier telemetry, evidence, payments, and auditable events—while adapting them to TrazJá requirements.
+FleetPulse is being used as a backend/domain reference, not copied 1:1. The PegaJá model keeps the same important logistics primitives—delivery lifecycle, ordered stops, assignment/dispatch, courier telemetry, evidence, payments, and auditable events—while adapting them to PegaJá requirements.
 
-TrazJá-specific rules include:
+PegaJá-specific rules include:
 
 1. Customer package photo is captured as a direct-camera evidence artifact.
 2. Customer package photo is not proof of delivery.
@@ -70,7 +70,7 @@ TrazJá-specific rules include:
 
 ## Customer PWA contract verification
 
-The first customer PWA implementation uses only the following live contracts: `create_delivery_draft`, `calculate_delivery_quote`, and `confirm_delivery`, plus RLS-protected draft inserts into `delivery_stops`, `delivery_packages`, and `delivery_evidence`. The client uploads package evidence only to the private `delivery-evidence` bucket, whose live policy accepts JPEG and WebP objects up to 10 MiB. Delivery history reads participant-authorized rows and subscribes to `delivery_events` for tracking refreshes.
+The first PegaJá customer PWA implementation uses only the following live contracts: `create_delivery_draft`, `calculate_delivery_quote`, and `confirm_delivery`, plus RLS-protected draft inserts into `delivery_stops`, `delivery_packages`, and `delivery_evidence`. The client uploads package evidence only to the private `delivery-evidence` bucket, whose live policy accepts JPEG and WebP objects up to 10 MiB. Delivery history reads participant-authorized rows and subscribes to `delivery_events` for tracking refreshes.
 
 The live database currently exposes no `customer_assistant_context` RPC. Paula is visible in the customer UI but reports this missing contract rather than fabricating account or delivery context. The current draft workflow is still multi-request from the client; an atomic server-side customer workflow should replace it before production rollout so partial draft rows or orphaned evidence objects cannot be left when a later step fails. The client does not delete evidence objects because the storage contract intentionally provides no client delete path.
 
