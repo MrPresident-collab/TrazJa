@@ -27,6 +27,7 @@ const money = (value: number | null | undefined, currency = 'AOA') => value == n
 const unwrap = <T,>(value: T | T[] | null): T | null => Array.isArray(value) ? value[0] ?? null : value;
 const idempotency = () => `${crypto.randomUUID()}-${Date.now()}`;
 const SUPPORT_WHATSAPP = (import.meta.env.VITE_SUPPORT_WHATSAPP || '').trim();
+const DEV_EMAIL_AUTH_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_EMAIL_AUTH === 'true';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -85,6 +86,7 @@ function App() {
 
   if (!session?.user && !welcomeSeen) {
     return <WelcomeScreen
+      showEmailAuth={DEV_EMAIL_AUTH_ENABLED}
       onPhoneContinue={(nextPhone) => {
         sessionStorage.setItem('pegaja-welcome-seen', '1');
         setWelcomeSeen(true);
@@ -147,6 +149,7 @@ function App() {
 
   if (!session?.user) {
     return <WelcomeScreen
+      showEmailAuth={DEV_EMAIL_AUTH_ENABLED}
       onPhoneContinue={(nextPhone) => {
         sessionStorage.setItem('pegaja-welcome-seen', '1');
         setWelcomeSeen(true);
@@ -209,10 +212,11 @@ function formatAngolaPhone(phone: string) {
   return digits.length === 9 ? `+244 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)}` : `+244 ${digits}`;
 }
 
-function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: {
+function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount, showEmailAuth = false }: {
   onPhoneContinue: (phone: string) => void;
   onEmailContinue: () => void;
   onCreateAccount: () => void;
+  showEmailAuth?: boolean;
 }) {
   const [phone, setPhone] = useState('');
   const normalizedPhone = normalizeAngolaPhone(phone);
@@ -252,8 +256,8 @@ function WelcomeScreen({ onPhoneContinue, onEmailContinue, onCreateAccount }: {
       <button className="primary welcome-continue" type="submit" disabled={!normalizedPhone}>CONTINUAR</button>
 
     </form>
-    <div className="welcome-divider"><span>ou</span></div>
-    <button className="welcome-email" onClick={onEmailContinue}>Continuar com Email</button>
+    {showEmailAuth && <><div className="welcome-divider"><span>ou</span></div>
+    <button className="welcome-email" onClick={onEmailContinue}>Continuar com Email</button></>}
     <p className="welcome-create">Não tens conta? <button onClick={onCreateAccount}>Criar conta</button></p>
   </main>;
 }
