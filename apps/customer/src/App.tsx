@@ -170,6 +170,24 @@ function App() {
   return <CustomerShell user={session.user} />;
 }
 
+
+function SplashScreen({ onStart }: { onStart: () => void }) {
+  return <main className="splash-screen" aria-label="PegaJá">
+    <section className="splash-brand">
+      <img
+        src="/pega-ja-handoff.svg"
+        alt="PegaJá"
+        className="splash-logo"
+      />
+      <h1>PEGAJÁ</h1>
+      <p>Tudo que precisa ir, Chega!</p>
+    </section>
+    <button className="splash-cta" type="button" onClick={onStart}>
+      Próximo <ChevronRight size={18} aria-hidden="true" />
+    </button>
+  </main>;
+}
+
 type SignupData = {
   firstName: string;
   surname: string;
