@@ -770,7 +770,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
   const scheduleLevels = levels.filter((item) => item.scheduling_supported);
   const availableLevels = deliveryMode === 'scheduled' ? scheduleLevels : levels;
   const canContinue =
-    step === 0 ? Boolean((pickupId || (customPickup.address_line.trim() && customPickup.locality.trim())) && destination.address_line.trim() && destination.locality.trim() && destination.contact_name.trim() && destination.contact_phone.trim()) :
+    step === 0 ? Boolean((pickupId || (customPickup.address_line.trim() && customPickup.locality.trim())) && destination.address_line.trim() && destination.locality.trim() && destination.contact_name.trim() && destination.contact_phone.trim() && stops.every((stop) => stop.address_line.trim() && stop.locality.trim())) :
     step === 1 ? Boolean(pkg.package_type && pkg.description.trim() && pkg.legalConsent && file) :
     step === 2 ? Boolean(levelId && (deliveryMode === 'now' || (scheduledDate && scheduledTime && selectedLevel?.scheduling_supported && selectedLevel.max_schedule_minutes && selectedLevel.schedule_start_minute != null && selectedLevel.schedule_end_minute != null && selectedLevel.schedule_interval_minutes))) :
     step === 3 ? Boolean(quote && payment) : Boolean(quote && payment && draft);
@@ -785,6 +785,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
   const emptyStop = (): StopInput => ({ address_line:'', locality:'', city:'', contact_name:'', contact_phone:'', alternative_contact_phone:'', instructions:'' });
   const addStops = () => setStops((current) => current.length === 0 ? [emptyStop(), emptyStop()] : [...current, emptyStop(), emptyStop()]);
   const updateStop = (index:number, field:keyof StopInput, value:string) => setStops((current) => current.map((stop,i) => i===index ? { ...stop, [field]:value } : stop));
+  const removeStop = (index:number) => setStops((current) => current.length <= 2 ? [] : current.filter((_,i) => i !== index));
 
   const prepareQuote = async () => {
     setBusy(true); setError('');
@@ -945,7 +946,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
       <AddressFields value={destination} onChange={updateDestination}/>
       <div className="shipment-stops-section">
         <div className="section-heading-inline"><div><p className="eyebrow">Rota</p><strong>Paragens intermédias</strong><small>Se adicionares paragens, a rota terá no mínimo 3 locais.</small></div><button type="button" className="secondary" onClick={addStops}><Plus size={17}/> Adicionar 2 paragens</button></div>
-        {stops.map((stop,index)=><div className="shipment-stop-card" key={index}><div className="section-heading-inline"><strong>Paragem {index+1}</strong><button type="button" className="text-button" onClick={()=>setStops((current)=>current.filter((_,i)=>i!==index))}>Remover</button></div><AddressFields value={stop} compact onChange={(field,value)=>updateStop(index,field,value)}/><label>Instruções <span className="optional-label">(opcional)</span><input value={stop.instructions} onChange={(e)=>updateStop(index,'instructions',e.target.value)} placeholder="Referência, portão, andar..."/></label></div>)}
+        {stops.map((stop,index)=><div className="shipment-stop-card" key={index}><div className="section-heading-inline"><strong>Paragem {index+1}</strong><button type="button" className="text-button" onClick={()=>removeStop(index)} disabled={stops.length===2}>Remover</button></div><AddressFields value={stop} compact onChange={(field,value)=>updateStop(index,field,value)}/><label>Instruções <span className="optional-label">(opcional)</span><input value={stop.instructions} onChange={(e)=>updateStop(index,'instructions',e.target.value)} placeholder="Referência, portão, andar..."/></label></div>)}
       </div>
     </>}
 
@@ -964,13 +965,11 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
     {step===3 && <>
       <div className="shipment-step-intro"><span className="shipment-step-number">4</span><div><p className="eyebrow">Entrega</p><h1>Como queres receber o serviço?</h1></div></div>
       <div className="shipment-delivery-mode-grid">
-        <button type="button" className={deliveryMode==='now'?'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('now')}><strong>🚀 Express</strong><small>Prioridade! mais rápida</small></button>
-        <button type="button" className={deliveryMode==='now' && !selectedLevel?.scheduling_supported ? 'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('now')}><strong>⚖️ Standard</strong><small>Opção normal</small></button>
-        <button type="button" className={deliveryMode==='scheduled'?'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('scheduled')}><strong>📅 Agendar</strong><small>Escolhe o dia e a hora da recolha</small></button>
+        <button type="button" className={deliveryMode==='now'?'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('now')}><strong>Entrega</strong><small>Envia assim que estiveres pronto.</small></button>
+        <button type="button" className={deliveryMode==='scheduled'?'shipment-mode-card selected':'shipment-mode-card'} onClick={()=>setDeliveryMode('scheduled')}><strong>Agendar</strong><small>Escolhe o dia e a hora da recolha.</small></button>
       </div>
-      {deliveryMode!=='scheduled' && <div className="stack shipment-service-list">{levels.map((level)=><button type="button" key={level.id} className={level.id===levelId?'service-card selected':'service-card'} onClick={()=>setLevelId(level.id)}><span><strong>{level.name}</strong><small>{level.description || 'Serviço de entrega PegaJá'}</small></span><ChevronRight size={18}/></button>)}</div>}
+      <div className="stack shipment-service-list">{availableLevels.map((level)=><button type="button" key={level.id} className={level.id===levelId?'service-card selected':'service-card'} onClick={()=>setLevelId(level.id)}><span><strong>{level.name}</strong><small>{level.description || 'Serviço de entrega PegaJá'}</small></span><ChevronRight size={18}/></button>)}</div>
       {deliveryMode==='scheduled' && <>
-        <div className="stack shipment-service-list">{scheduleLevels.map((level)=><button type="button" key={level.id} className={level.id===levelId?'service-card selected':'service-card'} onClick={()=>setLevelId(level.id)}><span><strong>{level.name}</strong><small>{level.description || 'Serviço de entrega PegaJá'}</small></span><ChevronRight size={18}/></button>)}</div>
         {scheduleLevels.length===0 ? <div className="notice">Nenhum serviço disponível para agendamento neste momento.</div> : <><div><p className="section-label">Escolhe o dia</p>{renderCalendar()}</div><div><p className="section-label">Escolhe a hora</p>{renderTimeWheel()}</div></>}
       </>}
       <div className="notice"><Clock3 size={18}/> O valor da entrega é calculado com base na rota e no serviço disponível.</div>
