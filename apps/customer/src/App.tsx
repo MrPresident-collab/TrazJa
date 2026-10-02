@@ -993,7 +993,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
       <label>Pagamento<select value={payment} onChange={(e)=>setPayment(e.target.value as typeof payment)}>{paymentOptions.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label>Gorjeta<select value={gratuity} onChange={(e)=>setGratuity(e.target.value)}>{gratuityOptions.filter((option)=>option.value!=='custom').map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       {gratuity!=='0' && quote && <div className="tip-preview">Gorjeta: {money(quote.total_amount*(Number(gratuity)/100),quote.currency)}</div>}
-      <div className="notice"><Check size={18}/> Tudo pronto. O envio só será criado depois de confirmares.</div>
+      <div className="notice"><Check size={18}/> Tudo pronto. O envio ainda não será confirmado até tocares em Confirmar.</div>
     </>}
 
     {error && <div className="error">{error}</div>}
