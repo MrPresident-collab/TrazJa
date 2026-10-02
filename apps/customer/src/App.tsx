@@ -4,7 +4,7 @@ import { Bell, Briefcase, Camera, Check, ChevronRight, CircleHelp, Clock3, FileT
 import type { Session, User as AuthUser } from '@supabase/supabase-js';
 
 type Address = { id: string; label: string | null; address_line: string; locality: string | null; city: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null };
-type ServiceLevel = { id: string; code: string; name: string; description: string | null; promised_minutes: number | null; same_day: boolean; scheduling_supported: boolean };
+type ServiceLevel = { id: string; code: string; name: string; description: string | null; promised_minutes: number | null; same_day: boolean; scheduling_supported: boolean; max_schedule_minutes: number | null };
 type StopInput = { address_line: string; locality: string; city: string; contact_name: string; contact_phone: string; alternative_contact_phone: string; instructions: string };
 type Delivery = { id: string; reference: string; status: string; quoted_amount: number | null; total_amount: number | null; currency: string; created_at: string; scheduled_for: string | null; service_level_id: string | null; delivery_stops: Array<{ id: string; sequence_no: number; stop_type: string; address_line: string; locality: string | null; city: string | null; contact_name: string | null; completed_at: string | null }>; delivery_packages: Array<{ id: string; description: string | null; package_type: string | null; fragile: boolean }> };
 type Notification = { id: string; title: string; body: string | null; read_at: string | null; created_at: string; type: string };
@@ -672,7 +672,7 @@ function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: 
   useEffect(() => {
     Promise.all([
       supabase.from('addresses').select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
-      supabase.from('service_levels').select('id,code,name,description,promised_minutes,same_day,scheduling_supported').eq('active', true).order('sort_order').limit(30),
+      supabase.from('service_levels').select('id,code,name,description,promised_minutes,same_day,scheduling_supported,max_schedule_minutes').eq('active', true).order('sort_order').limit(30),
       supabase.from('deliveries').select('id,reference,status,quoted_amount,total_amount,currency,created_at,scheduled_for,service_level_id,delivery_stops(id,sequence_no,stop_type,address_line,locality,city,contact_name,completed_at),delivery_packages(id,description,package_type,fragile)').in('status', ['dispatching','assigned','en_route_to_pickup','at_pickup','picked_up','in_transit','at_stop']).order('created_at', { ascending: false }).limit(3)
     ]).then(([a, s, d]) => {
       if (a.error || s.error || d.error) setError('Não conseguimos carregar tudo agora. Tenta novamente daqui a pouco.');
@@ -782,7 +782,8 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
     if (next.size > 10 * 1024 * 1024) { setError('A fotografia deve ter no máximo 10 MB.'); return; }
     setFile(next); setPreview(URL.createObjectURL(next)); setError('');
   };
-  const addStop = () => setStops((current) => [...current, { address_line:'', locality:'', city:'', contact_name:'', contact_phone:'', alternative_contact_phone:'', instructions:'' }]);
+  const emptyStop = (): StopInput => ({ address_line:'', locality:'', city:'', contact_name:'', contact_phone:'', alternative_contact_phone:'', instructions:'' });
+  const addStops = () => setStops((current) => current.length === 0 ? [emptyStop(), emptyStop()] : [...current, emptyStop(), emptyStop()]);
   const updateStop = (index:number, field:keyof StopInput, value:string) => setStops((current) => current.map((stop,i) => i===index ? { ...stop, [field]:value } : stop));
 
   const prepareQuote = async () => {
@@ -828,7 +829,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
         }
       ];
 
-      if (stops.length > 0 && stopRows.length < 3) throw new Error('Uma rota com paragem intermédia precisa de pelo menos 3 locais.');
+      if (stops.length === 1) throw new Error('Uma rota com paragens intermédias precisa de pelo menos 2 paragens.');
       const { data:stopData,error:stopError } = await supabase.from('delivery_stops').insert(stopRows).select('id,sequence_no,stop_type').order('sequence_no');
       if (stopError) throw stopError;
 
@@ -839,7 +840,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
       if (packageError) throw packageError;
 
       const extension=file!.type==='image/webp'?'webp':'jpg';
-      const objectPath=`${created.id}/${packageData.id}/${crypto.randomUUID()}.${extension}`;
+      const objectPath=`customer-package/${user.id}/${created.id}/${crypto.randomUUID()}.${extension}`;
       const { error:uploadError } = await supabase.storage.from('delivery-evidence').upload(objectPath,file!,{contentType:file!.type,upsert:false});
       if (uploadError) throw uploadError;
       const { error:evidenceError } = await supabase.from('delivery_evidence').insert({
@@ -895,7 +896,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
   };
 
   const renderCalendar = () => {
-    const days = Array.from({length:14},(_,i) => {
+    const days = Array.from({length: Math.max(1, Math.ceil((selectedLevel?.max_schedule_minutes ?? 0) / 1440) || 1)},(_,i) => {
       const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+i); return d;
     });
     return <div className="shipment-calendar">
@@ -933,6 +934,10 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
     {step===1 && <>
       <div className="shipment-step-intro"><span className="shipment-step-number">2</span><div><p className="eyebrow">Para onde?</p><h1>Para onde?</h1></div></div>
       <AddressFields value={destination} onChange={updateDestination}/>
+      <div className="shipment-stops-section">
+        <div className="section-heading-inline"><div><p className="eyebrow">Rota</p><strong>Paragens intermédias</strong><small>Se adicionares paragens, a rota terá no mínimo 3 locais.</small></div><button type="button" className="secondary" onClick={addStops}><Plus size={17}/> Adicionar 2 paragens</button></div>
+        {stops.map((stop,index)=><div className="shipment-stop-card" key={index}><div className="section-heading-inline"><strong>Paragem {index+1}</strong><button type="button" className="text-button" onClick={()=>setStops((current)=>current.filter((_,i)=>i!==index))}>Remover</button></div><AddressFields value={stop} compact onChange={(field,value)=>updateStop(index,field,value)}/><label>Instruções <span className="optional-label">(opcional)</span><input value={stop.instructions} onChange={(e)=>updateStop(index,'instructions',e.target.value)} placeholder="Referência, portão, andar..."/></label></div>)}
+      </div>
     </>}
 
     {step===2 && <>
