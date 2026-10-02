@@ -26,6 +26,7 @@ const statuses: Record<string, string> = { draft: 'Rascunho', quoted: 'Cotado', 
 const money = (value: number | null | undefined, currency = 'AOA') => value == null ? '—' : new Intl.NumberFormat('pt-AO', { style: 'currency', currency }).format(value);
 const unwrap = <T,>(value: T | T[] | null): T | null => Array.isArray(value) ? value[0] ?? null : value;
 const idempotency = () => `${crypto.randomUUID()}-${Date.now()}`;
+const SUPPORT_WHATSAPP = (import.meta.env.VITE_SUPPORT_WHATSAPP || '').trim();
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -1259,7 +1260,7 @@ function ProfileTab({ user }: { user: AuthUser }) {
       <div className="profile-help-group"><strong>PegaJá</strong>
         <button className="profile-row profile-row-action"><MessageCircle size={18} /><div><span>Pergunta à Paula</span></div><ChevronRight size={17} /></button>
         <button className="profile-row profile-row-action"><MessageCircle size={18} /><div><span>Linha de suporte</span></div><ChevronRight size={17} /></button>
-        <a className="profile-row profile-row-action" href="https://wa.me/244958316486" target="_blank" rel="noreferrer"><MessageCircle size={18} /><div><span>WhatsApp</span></div><ChevronRight size={17} /></a>
+        <>{SUPPORT_WHATSAPP && <a className="profile-row profile-row-action" href={"https://wa.me/" + SUPPORT_WHATSAPP.replace(/[^0-9]/g, "")} target="_blank" rel="noreferrer"><MessageCircle size={18} /><div><span>WhatsApp</span></div><ChevronRight size={17} /></a>}</>
       </div>
       <div className="profile-help-group emergency-group"><strong>Emergência</strong>
         <a className="profile-row profile-row-action emergency-row" href="tel:112"><Phone size={18} /><div><span>112&nbsp; Ambulância</span></div><ChevronRight size={17} /></a>
