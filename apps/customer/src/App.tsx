@@ -4,7 +4,7 @@ import { Bell, Briefcase, Camera, Check, ChevronRight, CircleHelp, Clock3, FileT
 import type { Session, User as AuthUser } from '@supabase/supabase-js';
 
 type Address = { id: string; label: string | null; address_line: string; locality: string | null; city: string | null; contact_name: string | null; contact_phone: string | null; instructions: string | null };
-type ServiceLevel = { id: string; code: string; name: string; description: string | null; promised_minutes: number | null; same_day: boolean; scheduling_supported: boolean; max_schedule_minutes: number | null };
+type ServiceLevel = { id: string; code: string; name: string; description: string | null; promised_minutes: number | null; same_day: boolean; scheduling_supported: boolean; max_schedule_minutes: number | null; schedule_start_minute: number | null; schedule_end_minute: number | null; schedule_interval_minutes: number | null };
 type StopInput = { address_line: string; locality: string; city: string; contact_name: string; contact_phone: string; alternative_contact_phone: string; instructions: string };
 type Delivery = { id: string; reference: string; status: string; quoted_amount: number | null; total_amount: number | null; currency: string; created_at: string; scheduled_for: string | null; service_level_id: string | null; delivery_stops: Array<{ id: string; sequence_no: number; stop_type: string; address_line: string; locality: string | null; city: string | null; contact_name: string | null; completed_at: string | null }>; delivery_packages: Array<{ id: string; description: string | null; package_type: string | null; fragile: boolean }> };
 type Notification = { id: string; title: string; body: string | null; read_at: string | null; created_at: string; type: string };
@@ -672,7 +672,7 @@ function HomeTab({ user, onCreated, onOpenPaula }: { user: AuthUser; onCreated: 
   useEffect(() => {
     Promise.all([
       supabase.from('addresses').select('id,label,address_line,locality,city,contact_name,contact_phone,instructions').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
-      supabase.from('service_levels').select('id,code,name,description,promised_minutes,same_day,scheduling_supported,max_schedule_minutes').eq('active', true).order('sort_order').limit(30),
+      supabase.from('service_levels').select('id,code,name,description,promised_minutes,same_day,scheduling_supported,max_schedule_minutes,schedule_start_minute,schedule_end_minute,schedule_interval_minutes').eq('active', true).order('sort_order').limit(30),
       supabase.from('deliveries').select('id,reference,status,quoted_amount,total_amount,currency,created_at,scheduled_for,service_level_id,delivery_stops(id,sequence_no,stop_type,address_line,locality,city,contact_name,completed_at),delivery_packages(id,description,package_type,fragile)').in('status', ['dispatching','assigned','en_route_to_pickup','at_pickup','picked_up','in_transit','at_stop']).order('created_at', { ascending: false }).limit(3)
     ]).then(([a, s, d]) => {
       if (a.error || s.error || d.error) setError('Não conseguimos carregar tudo agora. Tenta novamente daqui a pouco.');
@@ -772,7 +772,7 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
   const canContinue =
     step === 0 ? Boolean((pickupId || (customPickup.address_line.trim() && customPickup.locality.trim())) && destination.address_line.trim() && destination.locality.trim() && destination.contact_name.trim() && destination.contact_phone.trim()) :
     step === 1 ? Boolean(pkg.package_type && pkg.description.trim() && pkg.legalConsent && file) :
-    step === 2 ? Boolean(levelId && (deliveryMode === 'now' || (scheduledDate && scheduledTime && selectedLevel?.scheduling_supported))) :
+    step === 2 ? Boolean(levelId && (deliveryMode === 'now' || (scheduledDate && scheduledTime && selectedLevel?.scheduling_supported && selectedLevel.max_schedule_minutes && selectedLevel.schedule_start_minute != null && selectedLevel.schedule_end_minute != null && selectedLevel.schedule_interval_minutes))) :
     step === 3 ? Boolean(quote && payment) : Boolean(quote && payment && draft);
 
   const updateDestination = (field: keyof StopInput, value: string) => setDestination((current) => ({ ...current, [field]: value }));
@@ -896,9 +896,11 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
   };
 
   const renderCalendar = () => {
-    const days = Array.from({length: Math.max(1, Math.ceil((selectedLevel?.max_schedule_minutes ?? 0) / 1440) || 1)},(_,i) => {
+    const horizonMinutes = selectedLevel?.max_schedule_minutes;
+    if (!horizonMinutes || horizonMinutes <= 0) return <div className="notice">Este serviço não tem uma janela de agendamento configurada.</div>;
+    const days = Array.from({length: Math.max(1, Math.ceil(horizonMinutes / 1440) + 1)},(_,i) => {
       const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+i); return d;
-    });
+    }).filter((day) => day.getTime() <= Date.now() + horizonMinutes * 60000);
     return <div className="shipment-calendar">
       {days.map((day) => {
         const key=day.toISOString().slice(0,10);
@@ -911,8 +913,15 @@ function NewShipment({ user, addresses, levels, onCancel, onCreated }: { user: A
   };
 
   const renderTimeWheel = () => {
-    const times=Array.from({length:29},(_,i) => {
-      const minutes=8*60+i*30; return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+    const start = selectedLevel?.schedule_start_minute;
+    const end = selectedLevel?.schedule_end_minute;
+    const interval = selectedLevel?.schedule_interval_minutes;
+    if (start == null || end == null || interval == null || interval <= 0 || end <= start) return <div className="notice">Os horários de agendamento ainda não estão configurados para este serviço.</div>;
+    const times=Array.from({length:Math.floor((end-start)/interval)+1},(_,i) => {
+      const minutes=start+i*interval; return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+    }).filter((time) => {
+      if (scheduledDate !== new Date().toISOString().slice(0,10)) return true;
+      const [hour, minute] = time.split(':').map(Number); const candidate = new Date(); candidate.setHours(hour, minute, 0, 0); return candidate.getTime() > Date.now();
     });
     return <div className="time-wheel"><div className="time-wheel-track">{times.map((time) => <button type="button" key={time} className={scheduledTime===time?'time-option selected':'time-option'} onClick={() => setScheduledTime(time)}>{time}</button>)}</div></div>;
   };
