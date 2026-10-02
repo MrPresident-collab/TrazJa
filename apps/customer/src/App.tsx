@@ -1047,7 +1047,60 @@ function ShipmentsTab({ refreshToken }: { refreshToken: number }) {
     </section>
     {selected && <DeliveryDetail delivery={selected} onClose={() => setSelected(null)} />}
   </section>;
-}function NotificationsTab() { const [items, setItems] = useState<Notification[]>([]); const [error, setError] = useState(''); useEffect(() => { supabase.from('notifications').select('id,title,body,read_at,created_at,type').order('created_at', { ascending: false }).limit(100).then(({ data, error: queryError }) => { setItems(data || []); setError(queryError?.message || ''); }); }, []); return <section className="stack page-section"><div><p className="eyebrow">Acompanha o que importa</p><h1>Notificações</h1><p className="muted">Atualizações dos teus envios e da conta.</p></div>{error && <div className="error">{error}</div>}{items.map((item) => <div className={item.read_at ? 'notification' : 'notification unread'} key={item.id}><div className="round-icon terracotta"><Bell size={18} /></div><div><strong>{item.title}</strong><p>{item.body}</p><small>{new Date(item.created_at).toLocaleString('pt-AO')}</small></div></div>)}{!items.length && !error && <EmptyState title="Sem notificações" body="Quando houver novidades, aparecem aqui." />}</section>; }
+}function DeliveryDetail({ delivery, onClose }: { delivery: Delivery; onClose: () => void }) {
+  const pickup = delivery.delivery_stops?.[0];
+  const destination = delivery.delivery_stops?.at(-1);
+  const packageInfo = delivery.delivery_packages?.[0];
+
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+    if (event.target === event.currentTarget) onClose();
+  }}>
+    <section className="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="delivery-detail-title">
+      <div className="modal-header">
+        <div>
+          <p className="eyebrow">Envio</p>
+          <h2 id="delivery-detail-title">{delivery.reference}</h2>
+        </div>
+        <button className="icon-button" type="button" onClick={onClose} aria-label="Fechar detalhes">
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="status-banner">
+        <span className="status-dot" />
+        <span>Estado</span>
+        <strong>{statuses[delivery.status] || delivery.status}</strong>
+      </div>
+
+      <div className="timeline">
+        <div className="timeline-item">
+          <span className="timeline-dot done" />
+          <div><strong>Recolha</strong><p>{pickup?.address_line || 'Morada não disponível'}{pickup?.locality ? ` · ${pickup.locality}` : ''}</p></div>
+        </div>
+        <div className="timeline-item">
+          <span className="timeline-dot event" />
+          <div><strong>Destino</strong><p>{destination?.address_line || 'Morada não disponível'}{destination?.locality ? ` · ${destination.locality}` : ''}</p></div>
+        </div>
+      </div>
+
+      {packageInfo && <div className="timeline">
+        <div className="timeline-item">
+          <span className="timeline-dot event" />
+          <div><strong>Pacote</strong><p>{packageInfo.description || packageInfo.package_type || 'Pacote'}{packageInfo.fragile ? ' · Frágil' : ''}</p></div>
+        </div>
+      </div>}
+
+      <div className="timeline">
+        <div className="timeline-item">
+          <span className="timeline-dot event" />
+          <div><strong>Pagamento</strong><p>{money(delivery.total_amount ?? delivery.quoted_amount, delivery.currency || 'AOA')}</p></div>
+        </div>
+      </div>
+    </section>
+  </div>;
+}
+
+function NotificationsTab() { const [items, setItems] = useState<Notification[]>([]); const [error, setError] = useState(''); useEffect(() => { supabase.from('notifications').select('id,title,body,read_at,created_at,type').order('created_at', { ascending: false }).limit(100).then(({ data, error: queryError }) => { setItems(data || []); setError(queryError?.message || ''); }); }, []); return <section className="stack page-section"><div><p className="eyebrow">Acompanha o que importa</p><h1>Notificações</h1><p className="muted">Atualizações dos teus envios e da conta.</p></div>{error && <div className="error">{error}</div>}{items.map((item) => <div className={item.read_at ? 'notification' : 'notification unread'} key={item.id}><div className="round-icon terracotta"><Bell size={18} /></div><div><strong>{item.title}</strong><p>{item.body}</p><small>{new Date(item.created_at).toLocaleString('pt-AO')}</small></div></div>)}{!items.length && !error && <EmptyState title="Sem notificações" body="Quando houver novidades, aparecem aqui." />}</section>; }
 
 function ProfileTab({ user }: { user: AuthUser }) {
   const [profile, setProfile] = useState({ full_name: '', phone: '' });
